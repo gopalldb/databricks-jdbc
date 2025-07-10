@@ -112,8 +112,10 @@ public class ClientConfigurator {
       throws DatabricksSSLException {
     PoolingHttpClientConnectionManager connManager =
         ConfiguratorUtils.getBaseConnectionManager(connectionContext);
+
     // Default value is 100 which is consistent with the value in the SDK
     connManager.setMaxTotal(connectionContext.getHttpConnectionPoolSize());
+    connManager.setDefaultMaxPerRoute(connectionContext.getHttpMaxConnectionsPerRoute());
     httpClientBuilder.withConnectionManager(connManager);
   }
 
