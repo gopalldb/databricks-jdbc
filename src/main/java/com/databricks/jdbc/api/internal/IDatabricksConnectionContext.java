@@ -320,4 +320,10 @@ public interface IDatabricksConnectionContext {
 
   /** Returns the application name using JDBC Connection */
   String getApplicationName();
+s
+  /** Returns the maximum number of HTTP connections per route */
+  int getHttpMaxConnectionsPerRoute();
+
+  /** Returns the HTTP connection request timeout in seconds */
+  Integer getHttpConnectionRequestTimeout();
 }

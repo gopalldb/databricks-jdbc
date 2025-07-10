@@ -129,6 +129,11 @@ public enum DatabricksJdbcUrlParams {
   TOKEN_CACHE_PASS_PHRASE("TokenCachePassPhrase", "Pass phrase to use for OAuth U2M Token Cache"),
   ENABLE_TOKEN_CACHE("EnableTokenCache", "Enable caching OAuth tokens", "1"),
   APPLICATION_NAME("ApplicationName", "Name of application using the driver", ""),
+  APPLICATION_VERSION("ApplicationVersion", "Version of application using the driver", ""),
+  HTTP_MAX_CONNECTIONS_PER_ROUTE(
+          "HttpMaxConnectionsPerRoute", "Maximum connections per route for HTTP client", "1000"),
+  HTTP_CONNECTION_REQUEST_TIMEOUT(
+          "HttpConnectionRequestTimeout", "HTTP connection request timeout in seconds"),
   ;
 
   private final String paramName;
