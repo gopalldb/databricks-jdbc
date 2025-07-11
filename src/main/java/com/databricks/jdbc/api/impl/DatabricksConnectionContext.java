@@ -907,21 +907,18 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
 
   @Override
   public int getHttpMaxConnectionsPerRoute() {
-    int maxConnectionsPerRoute = DEFAULT_MAX_HTTP_CONNECTIONS_PER_ROUTE;
-    getParameter(DatabricksJdbcUrlParams.HTTP_MAX_CONNECTIONS_PER_ROUTE);
     try {
-      maxConnectionsPerRoute =
-          Integer.parseInt(getParameter(DatabricksJdbcUrlParams.HTTP_MAX_CONNECTIONS_PER_ROUTE));
+      return Integer.parseInt(getParameter(DatabricksJdbcUrlParams.HTTP_MAX_CONNECTIONS_PER_ROUTE));
     } catch (NumberFormatException e) {
       LOGGER.warn("Invalid value for HttpMaxConnectionsPerRoutes");
+      return DEFAULT_MAX_HTTP_CONNECTIONS_PER_ROUTE;
     }
-    return maxConnectionsPerRoute;
   }
 
   @Override
-  public Integer getHttpConnectionRequestTimeout() {
+  public Integer getHttpConnectionRequestTimeoutSeconds() {
     String httpConnectionRequestTimeout =
-        getParameter(DatabricksJdbcUrlParams.HTTP_CONNECTION_REQUEST_TIMEOUT);
+        getParameter(DatabricksJdbcUrlParams.HTTP_CONNECTION_REQUEST_TIMEOUT_SECS);
     if (!Strings.isNullOrEmpty(httpConnectionRequestTimeout)) {
       try {
         return Integer.parseInt(httpConnectionRequestTimeout);

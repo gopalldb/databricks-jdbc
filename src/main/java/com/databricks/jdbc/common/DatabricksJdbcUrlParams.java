@@ -136,11 +136,10 @@ public enum DatabricksJdbcUrlParams {
       "0"),
   FORCE_ENABLE_TELEMETRY("ForceEnableTelemetry", "Force enable telemetry", "0"),
   TELEMETRY_FLUSH_INTERVAL("TelemetryFlushInterval", "Flush interval in milliseconds", "5000"),
-  APPLICATION_VERSION("ApplicationVersion", "Version of application using the driver", ""),
   HTTP_MAX_CONNECTIONS_PER_ROUTE(
-      "HttpMaxConnectionsPerRoute", "Maximum connections per route for HTTP client", "1000"),
-  HTTP_CONNECTION_REQUEST_TIMEOUT(
-      "HttpConnectionRequestTimeout", "HTTP connection request timeout in seconds");
+      "HttpMaxConnectionsPerRoute", "Maximum connections per route for HTTP client", String.format("%d", DatabricksJdbcConstants.DEFAULT_MAX_HTTP_CONNECTIONS_PER_ROUTE)),
+  HTTP_CONNECTION_REQUEST_TIMEOUT_SECS(
+      "HttpConnectionRequestTimeoutSeconds", "HTTP connection request timeout in seconds");
 
   private final String paramName;
   private final String defaultValue;

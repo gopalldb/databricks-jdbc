@@ -337,5 +337,5 @@ public interface IDatabricksConnectionContext {
   int getHttpMaxConnectionsPerRoute();
 
   /** Returns the HTTP connection request timeout in seconds */
-  Integer getHttpConnectionRequestTimeout();
+  Integer getHttpConnectionRequestTimeoutSeconds();
 }
