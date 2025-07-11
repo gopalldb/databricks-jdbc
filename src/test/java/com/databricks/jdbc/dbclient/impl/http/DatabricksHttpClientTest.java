@@ -222,7 +222,7 @@ public class DatabricksHttpClientTest {
     IDatabricksConnectionContext connectionContext2 =
         Mockito.mock(IDatabricksConnectionContext.class);
     when(connectionContext2.getConnectionUuid()).thenReturn("sample-uuid-2");
-    when(connectionContext1.getHttpMaxConnectionsPerRoute()).thenReturn(100);
+    when(connectionContext2.getHttpMaxConnectionsPerRoute()).thenReturn(100);
 
     // Get instances of DatabricksHttpClient for each context
     IDatabricksHttpClient client1 =
