@@ -135,7 +135,11 @@ public enum DatabricksJdbcUrlParams {
       "Time limit for a chunk to be ready to consume when downloading",
       "0"),
   FORCE_ENABLE_TELEMETRY("ForceEnableTelemetry", "Force enable telemetry", "0"),
-  TELEMETRY_FLUSH_INTERVAL("TelemetryFlushInterval", "Flush interval in milliseconds", "5000");
+  TELEMETRY_FLUSH_INTERVAL("TelemetryFlushInterval", "Flush interval in milliseconds", "5000"),
+  HTTP_MAX_CONNECTIONS_PER_ROUTE(
+      "HttpMaxConnectionsPerRoute", "Maximum connections per route for HTTP client", "1000"),
+  HTTP_CONNECTION_REQUEST_TIMEOUT(
+      "HttpConnectionRequestTimeout", "HTTP connection request timeout in seconds");
 
   private final String paramName;
   private final String defaultValue;
