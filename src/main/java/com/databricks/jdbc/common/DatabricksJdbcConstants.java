@@ -164,7 +164,7 @@ public final class DatabricksJdbcConstants {
   public static final Pattern LIST_PATTERN =
       Pattern.compile("^(\\s*\\()*\\s*LIST", Pattern.CASE_INSENSITIVE);
   public static final String DEFAULT_USERNAME =
-      "token"; // This is for PAT. We do not support Basic Auth.
+      "token"; // This is for PAT. We do not support Basic Auth
 
   public static final int DEFAULT_MAX_HTTP_CONNECTIONS_PER_ROUTE = 1000;
 }
