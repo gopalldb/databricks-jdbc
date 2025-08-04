@@ -146,6 +146,28 @@ public enum DatabricksJdbcUrlParams {
       "MaxVolumeOperationConcurrentPresignedRequests",
       "Maximum number of concurrent presigned requests",
       "50"),
+  TELEMETRY_CIRCUIT_BREAKER_ENABLED(
+      "TelemetryCircuitBreakerEnabled", "Enable circuit breaker for telemetry", "0"),
+  TELEMETRY_CIRCUIT_BREAKER_FAILURE_RATE_THRESHOLD(
+      "TelemetryCircuitBreakerFailureRateThreshold",
+      "Failure rate threshold for circuit breaker in percentage",
+      "70.0"),
+  TELEMETRY_CIRCUIT_BREAKER_MINIMUM_NUMBER_OF_CALLS(
+      "TelemetryCircuitBreakerMinimumNumberOfCalls",
+      "Minimum number of calls before circuit breaker can open",
+      "10"),
+  TELEMETRY_CIRCUIT_BREAKER_SLIDING_WINDOW_SIZE(
+      "TelemetryCircuitBreakerSlidingWindowSize",
+      "Sliding window size for failure rate calculation",
+      "20"),
+  TELEMETRY_CIRCUIT_BREAKER_WAIT_DURATION_SECONDS_IN_OPEN_STATE(
+      "TelemetryCircuitBreakerWaitDurationSecondsInOpenState",
+      "Wait duration before transitioning from OPEN to HALF_OPEN state",
+      "60"), // 1 minute
+  TELEMETRY_CIRCUIT_BREAKER_PERMITTED_NUMBER_OF_CALLS_IN_HALF_OPEN_STATE(
+      "TelemetryCircuitBreakerPermittedNumberOfCallsInHalfOpenState",
+      "Permitted number of calls in HALF_OPEN state before deciding to close or open",
+      "5"),
   CLOUD_FETCH_SPEED_THRESHOLD(
       "CloudFetchSpeedThreshold", "Minimum expected download speed in MB/s", "0.1");
 

@@ -341,4 +341,22 @@ public interface IDatabricksConnectionContext {
 
   /** Returns the flush interval in milliseconds for telemetry */
   int getTelemetryFlushIntervalInMilliseconds();
+
+  /** Returns whether circuit breaker is enabled for telemetry */
+  boolean isTelemetryCircuitBreakerEnabled();
+
+  /** Returns the failure rate threshold for circuit breaker in percentage */
+  Float getTelemetryCircuitBreakerFailureRateThreshold();
+
+  /** Returns the minimum number of calls for circuit breaker to open */
+  int getTelemetryCircuitBreakerMinimumNumberOfCalls();
+
+  /** Returns the sliding window size for circuit breaker */
+  int getTelemetryCircuitBreakerSlidingWindowSize();
+
+  /** Returns the wait duration in open state for circuit breaker */
+  int getTelemetryCircuitBreakerWaitDurationSecondsInOpenState();
+
+  /** Returns the permitted number of calls in half-open state for circuit breaker */
+  int getTelemetryCircuitBreakerPermittedNumberOfCallsInHalfOpenState();
 }
