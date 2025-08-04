@@ -10,6 +10,7 @@
 - Added validation on UID param to ensure it is either not set or set to 'token'.
 - Added CloudFetch download speed logging at INFO level
 - Added vendor error codes to SQLExceptions raised for incorrect UID, host or token.
+- Added support for providing custom HTTP options: `HttpMaxConnectionsPerRoute` and `HttpConnectionRequestTimeout`.
 
 ### Updated
 - Column name support for JDBC ResultSet operations is now case-insensitive
