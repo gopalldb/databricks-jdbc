@@ -345,21 +345,6 @@ public interface IDatabricksConnectionContext {
   /** Returns whether circuit breaker is enabled for telemetry */
   boolean isTelemetryCircuitBreakerEnabled();
 
-  /** Returns the failure rate threshold for circuit breaker in percentage */
-  Float getTelemetryCircuitBreakerFailureRateThreshold();
-
-  /** Returns the minimum number of calls for circuit breaker to open */
-  int getTelemetryCircuitBreakerMinimumNumberOfCalls();
-
-  /** Returns the sliding window size for circuit breaker */
-  int getTelemetryCircuitBreakerSlidingWindowSize();
-
-  /** Returns the wait duration in open state for circuit breaker */
-  int getTelemetryCircuitBreakerWaitDurationSecondsInOpenState();
-
-  /** Returns the permitted number of calls in half-open state for circuit breaker */
-  int getTelemetryCircuitBreakerPermittedNumberOfCallsInHalfOpenState();
-
   /** Returns the maximum number of HTTP connections per route */
   int getHttpMaxConnectionsPerRoute();
 

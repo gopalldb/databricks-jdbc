@@ -5,18 +5,11 @@ import static com.databricks.jdbc.telemetry.TelemetryHelper.isTelemetryAllowedFo
 import com.databricks.jdbc.api.internal.IDatabricksConnectionContext;
 import com.databricks.jdbc.log.JdbcLogger;
 import com.databricks.jdbc.log.JdbcLoggerFactory;
-import com.databricks.jdbc.model.telemetry.TelemetryFrontendLog;
 import com.databricks.sdk.core.DatabricksConfig;
 import com.google.common.annotations.VisibleForTesting;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
-
 
 public class TelemetryClientFactory {
 
@@ -50,22 +43,14 @@ public class TelemetryClientFactory {
     if (databricksConfig != null) {
       return telemetryClients.computeIfAbsent(
           connectionContext.getConnectionUuid(),
-          k -> {
-              TelemetryClient baseClient = new TelemetryClient(
-                  connectionContext, getTelemetryExecutorService(), databricksConfig);
-              CircuitBreakerConfig config = CircuitBreakerConfigurator.createConfig(connectionContext);
-              return config != null ? new CircuitBreakerTelemetryClient(baseClient, config) : baseClient;
-          });
+          k ->
+              new TelemetryClient(
+                  connectionContext, getTelemetryExecutorService(), databricksConfig));
     }
     // Use no-auth telemetry client if connection creation failed.
     return noauthTelemetryClients.computeIfAbsent(
         connectionContext.getConnectionUuid(),
-        k -> {
-            TelemetryClient baseClient = new TelemetryClient(
-                connectionContext, getTelemetryExecutorService());
-            CircuitBreakerConfig config = CircuitBreakerConfigurator.createConfig(connectionContext);
-            return config != null ? new CircuitBreakerTelemetryClient(baseClient, config) : baseClient;
-        });
+        k -> new TelemetryClient(connectionContext, getTelemetryExecutorService()));
   }
 
   public void closeTelemetryClient(IDatabricksConnectionContext connectionContext) {
@@ -101,4 +86,3 @@ public class TelemetryClientFactory {
     }
   }
 }
-

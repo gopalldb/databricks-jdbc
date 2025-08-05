@@ -930,30 +930,6 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
   public boolean isTelemetryCircuitBreakerEnabled() {
     return getParameter(DatabricksJdbcUrlParams.TELEMETRY_CIRCUIT_BREAKER_ENABLED).equals("1");
   }
-    @Override
-    public Float getTelemetryCircuitBreakerFailureRateThreshold() {
-    return Float.parseFloat(getParameter(DatabricksJdbcUrlParams.TELEMETRY_CIRCUIT_BREAKER_FAILURE_RATE_THRESHOLD));
-    }
-
-  @Override
-  public int getTelemetryCircuitBreakerMinimumNumberOfCalls() {
-    return Integer.parseInt(getParameter(DatabricksJdbcUrlParams.TELEMETRY_CIRCUIT_BREAKER_MINIMUM_NUMBER_OF_CALLS))
-  }
-
-  @Override
-  public int getTelemetryCircuitBreakerSlidingWindowSize() {
-    return Integer.parseInt(getParameter(DatabricksJdbcUrlParams.TELEMETRY_CIRCUIT_BREAKER_SLIDING_WINDOW_SIZE));
-  }
-
-  @Override
-  public int getTelemetryCircuitBreakerWaitDurationSecondsInOpenState() {
-    return Integer.parseInt(getParameter(DatabricksJdbcUrlParams.TELEMETRY_CIRCUIT_BREAKER_WAIT_DURATION_SECONDS_IN_OPEN_STATE));
-  }
-
-  @Override
-  public int getTelemetryCircuitBreakerPermittedNumberOfCallsInHalfOpenState() {
-    return Integer.parseInt(getParameter(DatabricksJdbcUrlParams.TELEMETRY_CIRCUIT_BREAKER_PERMITTED_NUMBER_OF_CALLS_IN_HALF_OPEN_STATE));
-  }
 
   @Override
   public int getHttpMaxConnectionsPerRoute() {
