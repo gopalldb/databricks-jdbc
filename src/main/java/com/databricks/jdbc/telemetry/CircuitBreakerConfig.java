@@ -26,6 +26,22 @@ public class CircuitBreakerConfig {
         connectionContext.getTelemetryCircuitBreakerPermittedNumberOfCallsInHalfOpenState();
   }
 
+  /**
+   * Creates a circuit breaker configuration based on connection context properties.
+   *
+   * @param connectionContext The connection context containing configuration properties
+   * @return CircuitBreakerConfig with settings from connection context or defaults
+   */
+  public static CircuitBreakerConfig createConfig(IDatabricksConnectionContext connectionContext) {
+
+    // Check if circuit breaker is enabled (default: true)
+    if (!connectionContext.isTelemetryCircuitBreakerEnabled()) {
+      return null;
+    }
+
+    return new CircuitBreakerConfig(connectionContext);
+  }
+
   public float getFailureRateThreshold() {
     return failureRateThreshold;
   }

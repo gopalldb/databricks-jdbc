@@ -168,6 +168,10 @@ public enum DatabricksJdbcUrlParams {
       "TelemetryCircuitBreakerPermittedNumberOfCallsInHalfOpenState",
       "Permitted number of calls in HALF_OPEN state before deciding to close or open",
       "5"),
+  HTTP_MAX_CONNECTIONS_PER_ROUTE(
+      "HttpMaxConnectionsPerRoute", "Maximum connections per route for HTTP client", "1000"),
+  HTTP_CONNECTION_REQUEST_TIMEOUT(
+      "HttpConnectionRequestTimeout", "HTTP connection request timeout in seconds"),
   CLOUD_FETCH_SPEED_THRESHOLD(
       "CloudFetchSpeedThreshold", "Minimum expected download speed in MB/s", "0.1");
 

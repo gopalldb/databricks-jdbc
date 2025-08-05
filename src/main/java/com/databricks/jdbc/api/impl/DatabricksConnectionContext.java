@@ -21,6 +21,7 @@ import com.databricks.sdk.core.DatabricksEnvironment;
 import com.databricks.sdk.core.ProxyConfig;
 import com.databricks.sdk.core.utils.Cloud;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import java.net.URI;
 import java.util.*;
@@ -927,7 +928,7 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
 
   @Override
   public boolean isTelemetryCircuitBreakerEnabled() {
-    return getParameter()
+    return getParameter(DatabricksJdbcUrlParams.TELEMETRY_CIRCUIT_BREAKER_ENABLED).equals("1");
   }
     @Override
     public Float getTelemetryCircuitBreakerFailureRateThreshold() {
@@ -952,6 +953,32 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
   @Override
   public int getTelemetryCircuitBreakerPermittedNumberOfCallsInHalfOpenState() {
     return Integer.parseInt(getParameter(DatabricksJdbcUrlParams.TELEMETRY_CIRCUIT_BREAKER_PERMITTED_NUMBER_OF_CALLS_IN_HALF_OPEN_STATE));
+  }
+
+  @Override
+  public int getHttpMaxConnectionsPerRoute() {
+    int maxConnectionsPerRoute = DEFAULT_MAX_HTTP_CONNECTIONS_PER_ROUTE;
+    try {
+      maxConnectionsPerRoute =
+          Integer.parseInt(getParameter(DatabricksJdbcUrlParams.HTTP_MAX_CONNECTIONS_PER_ROUTE));
+    } catch (NumberFormatException e) {
+      LOGGER.warn("Invalid value for HttpMaxConnectionsPerRoutes");
+    }
+    return maxConnectionsPerRoute;
+  }
+
+  @Override
+  public Integer getHttpConnectionRequestTimeout() {
+    String httpConnectionRequestTimeout =
+        getParameter(DatabricksJdbcUrlParams.HTTP_CONNECTION_REQUEST_TIMEOUT);
+    if (!Strings.isNullOrEmpty(httpConnectionRequestTimeout)) {
+      try {
+        return Integer.parseInt(httpConnectionRequestTimeout);
+      } catch (NumberFormatException e) {
+        LOGGER.warn("Invalid value for HttpConnectionRequestTimeout");
+      }
+    }
+    return null;
   }
 
   private static boolean nullOrEmptyString(String s) {

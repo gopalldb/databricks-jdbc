@@ -359,4 +359,10 @@ public interface IDatabricksConnectionContext {
 
   /** Returns the permitted number of calls in half-open state for circuit breaker */
   int getTelemetryCircuitBreakerPermittedNumberOfCallsInHalfOpenState();
+
+  /** Returns the maximum number of HTTP connections per route */
+  int getHttpMaxConnectionsPerRoute();
+
+  /** Returns the HTTP connection request timeout in seconds */
+  Integer getHttpConnectionRequestTimeout();
 }
