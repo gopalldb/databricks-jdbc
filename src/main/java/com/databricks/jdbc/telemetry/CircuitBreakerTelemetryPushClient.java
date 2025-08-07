@@ -33,16 +33,6 @@ public class CircuitBreakerTelemetryPushClient implements ITelemetryPushClient {
     this.delegate = delegate;
     this.host = host;
     this.circuitBreaker = CircuitBreaker.of("telemetry-client-test", config);
-    circuitBreaker
-        .getEventPublisher()
-        .onStateTransition(
-            event -> {
-              LOGGER.debug(
-                  "CircuitBreaker for host [{}] transitioned from {} to {}",
-                  host,
-                  event.getStateTransition().getFromState(),
-                  event.getStateTransition().getToState());
-            });
   }
 
   @Override

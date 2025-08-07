@@ -73,6 +73,13 @@ public class CircuitBreakerManager {
     LOGGER.debug("CircuitBreakerManager initialized");
   }
 
+  /**
+   * Retrieves the CircuitBreaker for the specified host. If it does not exist, it creates a new one
+   * with the default configuration.
+   *
+   * @param host The host for which to retrieve the CircuitBreaker.
+   * @return The CircuitBreaker instance for the specified host.
+   */
   public CircuitBreaker getCircuitBreaker(String host) {
     return breakerPerHost.computeIfAbsent(
         host,
