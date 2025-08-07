@@ -17,6 +17,11 @@ import java.util.concurrent.RejectedExecutionException;
 import org.apache.arrow.util.VisibleForTesting;
 import org.apache.http.client.HttpResponseException;
 
+/**
+ * CircuitBreakerManager is a singleton that manages circuit breakers for different hosts. It
+ * initializes circuit breakers with a predefined configuration and provides methods to retrieve or
+ * reset them.
+ */
 public class CircuitBreakerManager {
   private static final JdbcLogger LOGGER = JdbcLoggerFactory.getLogger(CircuitBreakerManager.class);
 
@@ -77,7 +82,7 @@ public class CircuitBreakerManager {
               .getEventPublisher()
               .onStateTransition(
                   event -> {
-                    LOGGER.info(
+                    LOGGER.debug(
                         "CircuitBreaker for host [{}] transitioned from {} to {}",
                         h,
                         event.getStateTransition().getFromState(),

@@ -62,7 +62,7 @@ public class TelemetryPushClient implements ITelemetryPushClient {
     try (CloseableHttpResponse response = httpClient.execute(post)) {
       // TODO: check response and add retry for partial failures
       if (!HttpUtil.isSuccessfulHttpResponse(response)) {
-        LOGGER.trace(
+        LOGGER.debug(
             "Failed to push telemetry logs with error response: {}", response.getStatusLine());
         return;
       }

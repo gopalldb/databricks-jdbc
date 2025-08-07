@@ -70,7 +70,7 @@ class TelemetryPushTask implements Runnable {
       pushClient.pushEvent(request);
     } catch (Exception e) {
       // Retry is already handled in HTTP client, we can return from here
-      LOGGER.trace("Failed to push telemetry logs because of the error {}", e.getMessage());
+      LOGGER.trace("Failed to push telemetry logs because of the error {}", e);
     }
   }
 }

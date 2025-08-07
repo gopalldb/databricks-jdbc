@@ -37,13 +37,12 @@ public class CircuitBreakerTelemetryPushClient implements ITelemetryPushClient {
         .getEventPublisher()
         .onStateTransition(
             event -> {
-              LOGGER.info(
+              LOGGER.debug(
                   "CircuitBreaker for host [{}] transitioned from {} to {}",
                   host,
                   event.getStateTransition().getFromState(),
                   event.getStateTransition().getToState());
             });
-    ;
   }
 
   @Override
@@ -58,7 +57,7 @@ public class CircuitBreakerTelemetryPushClient implements ITelemetryPushClient {
       LOGGER.debug("Failed to export telemetry for host [{}]: {}", host, e.getMessage());
 
       if (circuitBreaker.getState() == CircuitBreaker.State.OPEN) {
-        LOGGER.warn("CircuitBreaker for host [{}] is OPEN - dropping telemetry", host);
+        LOGGER.debug("CircuitBreaker for host [{}] is OPEN - dropping telemetry", host);
       }
     }
   }
@@ -68,6 +67,7 @@ public class CircuitBreakerTelemetryPushClient implements ITelemetryPushClient {
    *
    * @return The current circuit breaker state
    */
+  @VisibleForTesting
   CircuitBreaker.State getCircuitBreakerState() {
     return circuitBreaker.getState();
   }
@@ -77,6 +77,7 @@ public class CircuitBreakerTelemetryPushClient implements ITelemetryPushClient {
    *
    * @return Circuit breaker metrics
    */
+  @VisibleForTesting
   CircuitBreaker.Metrics getCircuitBreakerMetrics() {
     return circuitBreaker.getMetrics();
   }
