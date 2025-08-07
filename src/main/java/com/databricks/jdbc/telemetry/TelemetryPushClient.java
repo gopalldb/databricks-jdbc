@@ -84,6 +84,14 @@ public class TelemetryPushClient implements ITelemetryPushClient {
             request.getProtoLogs().size(),
             telResponse.getNumProtoSuccess());
       }
+    } catch (Exception e) {
+      LOGGER.debug(
+          "Failed to push telemetry logs with error: {}, request: {}",
+          e.getMessage(),
+          objectMapper.writeValueAsString(request));
+      if (connectionContext.isTelemetryCircuitBreakerEnabled()) {
+        throw e; // Re-throw to allow circuit breaker to handle it
+      }
     }
   }
 }
