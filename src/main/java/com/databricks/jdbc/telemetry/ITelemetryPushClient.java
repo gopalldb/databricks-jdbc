@@ -4,7 +4,9 @@ import com.databricks.jdbc.model.telemetry.TelemetryRequest;
 
 /**
  * Interface for pushing telemetry events. Implementations should handle the actual transmission of
- * telemetry data.
+ * telemetry data. This actually pushes the data to the telemetry service. The circuit breaker is
+ * engaged here to prevent overwhelming the service with requests during outages or high error
+ * rates.
  */
 interface ITelemetryPushClient {
 
