@@ -224,9 +224,9 @@ final class DatabricksThriftAccessor {
 
       StatementId statementId = new StatementId(response.getOperationHandle().operationId);
       LOGGER.debug(
-          String.format(
-              "Executed statement for statementId [%s] in session [%s]",
-              statementId.toSQLExecStatementId(), session.getSessionId()));
+          "Executed statement for statementId {} in session {}",
+          statementId.toSQLExecStatementId(),
+          session.getSessionId());
 
       DatabricksThreadContextHolder.setStatementId(statementId);
       if (parentStatement != null) {
