@@ -16,8 +16,8 @@ public class TelemetryClient implements ITelemetryClient {
   private final IDatabricksConnectionContext context;
   private final DatabricksConfig databricksConfig;
   private final int eventsBatchSize;
-  private final boolean isAuthEnabled;
   private final ExecutorService executorService;
+  private final ITelemetryPushClient telemetryPushClient;
   private final ScheduledExecutorService scheduledExecutorService;
   private List<TelemetryFrontendLog> eventsBatch;
   private volatile long lastFlushedTime;
@@ -30,7 +30,6 @@ public class TelemetryClient implements ITelemetryClient {
       DatabricksConfig config) {
     this.eventsBatch = new LinkedList<>();
     this.eventsBatchSize = connectionContext.getTelemetryBatchSize();
-    this.isAuthEnabled = true;
     this.context = connectionContext;
     this.databricksConfig = config;
     this.executorService = executorService;
@@ -38,6 +37,9 @@ public class TelemetryClient implements ITelemetryClient {
         java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
     this.flushIntervalMillis = context.getTelemetryFlushIntervalInMilliseconds();
     this.lastFlushedTime = System.currentTimeMillis();
+    this.telemetryPushClient =
+        TelemetryClientFactory.getTelemetryPushClient(
+            true /* isAuthEnabled */, context, databricksConfig);
     schedulePeriodicFlush();
   }
 
@@ -45,7 +47,6 @@ public class TelemetryClient implements ITelemetryClient {
       IDatabricksConnectionContext connectionContext, ExecutorService executorService) {
     this.eventsBatch = new LinkedList<>();
     this.eventsBatchSize = connectionContext.getTelemetryBatchSize();
-    this.isAuthEnabled = false;
     this.context = connectionContext;
     this.databricksConfig = null;
     this.executorService = executorService;
@@ -53,6 +54,9 @@ public class TelemetryClient implements ITelemetryClient {
         java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
     this.flushIntervalMillis = context.getTelemetryFlushIntervalInMilliseconds();
     this.lastFlushedTime = System.currentTimeMillis();
+    this.telemetryPushClient =
+        TelemetryClientFactory.getTelemetryPushClient(
+            false /* isAuthEnabled */, context, null /* databricksConfig */);
     schedulePeriodicFlush();
   }
 
@@ -98,8 +102,7 @@ public class TelemetryClient implements ITelemetryClient {
     synchronized (this) {
       if (!eventsBatch.isEmpty()) {
         List<TelemetryFrontendLog> logsToBeFlushed = eventsBatch;
-        executorService.submit(
-            new TelemetryPushTask(logsToBeFlushed, isAuthEnabled, context, databricksConfig));
+        executorService.submit(new TelemetryPushTask(logsToBeFlushed, telemetryPushClient));
         eventsBatch = new LinkedList<>();
       }
       lastFlushedTime = System.currentTimeMillis();
