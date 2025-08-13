@@ -16,6 +16,7 @@ public class TelemetryClientFactory {
 
   private static final JdbcLogger LOGGER =
       JdbcLoggerFactory.getLogger(TelemetryClientFactory.class);
+  private static final String DEFAULT_HOST = "unknown-host";
 
   private static final TelemetryClientFactory INSTANCE = new TelemetryClientFactory();
 
@@ -82,7 +83,7 @@ public class TelemetryClientFactory {
         // since host parsing is fundamental to JDBC.
         LOGGER.error(e, "Error parsing host url");
         // Fallback to a default value, we don't want to throw any exception from Telemetry
-        host = "unknown-host";
+        host = DEFAULT_HOST;
       }
       pushClient = new CircuitBreakerTelemetryPushClient(pushClient, host);
     }

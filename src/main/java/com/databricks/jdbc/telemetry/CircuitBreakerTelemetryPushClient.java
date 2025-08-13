@@ -16,6 +16,7 @@ public class CircuitBreakerTelemetryPushClient implements ITelemetryPushClient {
 
   private static final JdbcLogger LOGGER =
       JdbcLoggerFactory.getLogger(CircuitBreakerTelemetryPushClient.class);
+  private static final String TEST_CLIENT_NAME = "telemetry-client-test";
 
   private final ITelemetryPushClient delegate;
   private final CircuitBreaker circuitBreaker;
@@ -32,7 +33,7 @@ public class CircuitBreakerTelemetryPushClient implements ITelemetryPushClient {
       ITelemetryPushClient delegate, String host, CircuitBreakerConfig config) {
     this.delegate = delegate;
     this.host = host;
-    this.circuitBreaker = CircuitBreaker.of("telemetry-client-test", config);
+    this.circuitBreaker = CircuitBreaker.of(TEST_CLIENT_NAME, config);
   }
 
   @Override
