@@ -7,9 +7,12 @@ import com.databricks.sdk.core.DatabricksConfig;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class TelemetryClient implements ITelemetryClient {
 
@@ -24,6 +27,19 @@ public class TelemetryClient implements ITelemetryClient {
   private ScheduledFuture<?> flushTask;
   private final int flushIntervalMillis;
 
+  private static ThreadFactory createSchedulerThreadFactory() {
+    return new ThreadFactory() {
+      private final AtomicInteger threadNumber = new AtomicInteger(1);
+
+      @Override
+      public Thread newThread(Runnable r) {
+        Thread thread = new Thread(r, "Telemetry-Scheduler-" + threadNumber.getAndIncrement());
+        thread.setDaemon(true);
+        return thread;
+      }
+    };
+  }
+
   public TelemetryClient(
       IDatabricksConnectionContext connectionContext,
       ExecutorService executorService,
@@ -34,7 +50,7 @@ public class TelemetryClient implements ITelemetryClient {
     this.databricksConfig = config;
     this.executorService = executorService;
     this.scheduledExecutorService =
-        java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        Executors.newSingleThreadScheduledExecutor(createSchedulerThreadFactory());
     this.flushIntervalMillis = context.getTelemetryFlushIntervalInMilliseconds();
     this.lastFlushedTime = System.currentTimeMillis();
     this.telemetryPushClient =
@@ -51,7 +67,7 @@ public class TelemetryClient implements ITelemetryClient {
     this.databricksConfig = null;
     this.executorService = executorService;
     this.scheduledExecutorService =
-        java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        Executors.newSingleThreadScheduledExecutor(createSchedulerThreadFactory());
     this.flushIntervalMillis = context.getTelemetryFlushIntervalInMilliseconds();
     this.lastFlushedTime = System.currentTimeMillis();
     this.telemetryPushClient =
@@ -72,7 +88,7 @@ public class TelemetryClient implements ITelemetryClient {
   private void periodicFlush() {
     long now = System.currentTimeMillis();
     if (now - lastFlushedTime >= flushIntervalMillis) {
-      flush();
+      flush(true);
     }
   }
 
@@ -82,8 +98,8 @@ public class TelemetryClient implements ITelemetryClient {
       eventsBatch.add(event);
     }
 
-    if (eventsBatch.size() == eventsBatchSize) {
-      flush();
+    if (isBatchFull()) {
+      flush(false);
     }
   }
 
@@ -91,16 +107,20 @@ public class TelemetryClient implements ITelemetryClient {
   public void close() {
     // Export any pending latency telemetry before flushing
     TelemetryCollector.getInstance().exportAllPendingTelemetryDetails();
-    flush();
+    flush(true);
     if (flushTask != null) {
       flushTask.cancel(false);
     }
     scheduledExecutorService.shutdown();
   }
 
-  private void flush() {
+  /**
+   * @param forceFlush - Flushes the eventsBatch for all size variations if forceFlush, otherwise
+   *     only flushes if eventsBatch size has breached
+   */
+  private void flush(boolean forceFlush) {
     synchronized (this) {
-      if (!eventsBatch.isEmpty()) {
+      if (!forceFlush ? isBatchFull() : !eventsBatch.isEmpty()) {
         List<TelemetryFrontendLog> logsToBeFlushed = eventsBatch;
         executorService.submit(new TelemetryPushTask(logsToBeFlushed, telemetryPushClient));
         eventsBatch = new LinkedList<>();
@@ -113,5 +133,9 @@ public class TelemetryClient implements ITelemetryClient {
     synchronized (this) {
       return eventsBatch.size();
     }
+  }
+
+  private boolean isBatchFull() {
+    return eventsBatch.size() >= eventsBatchSize;
   }
 }

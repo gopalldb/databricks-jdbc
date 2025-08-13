@@ -28,7 +28,7 @@ class TelemetryPushTask implements Runnable {
 
   @Override
   public void run() {
-    LOGGER.debug("Pushing Telemetry logs of size {}", queueToBePushed.size());
+    LOGGER.trace("Pushing Telemetry logs of size {}", queueToBePushed.size());
     TelemetryRequest request = new TelemetryRequest();
     if (queueToBePushed.isEmpty()) {
       return;
@@ -43,7 +43,7 @@ class TelemetryPushTask implements Runnable {
                         try {
                           return objectMapper.writeValueAsString(event);
                         } catch (JsonProcessingException e) {
-                          LOGGER.error(
+                          LOGGER.trace(
                               "Failed to serialize Telemetry event {} with error: {}", event, e);
                           return null; // Return null for failed serialization
                         }

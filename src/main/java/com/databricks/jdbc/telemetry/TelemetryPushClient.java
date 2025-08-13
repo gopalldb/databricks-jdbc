@@ -44,7 +44,6 @@ public class TelemetryPushClient implements ITelemetryPushClient {
 
   @Override
   public void pushEvent(TelemetryRequest request) throws Exception {
-
     IDatabricksHttpClient httpClient =
         DatabricksHttpClientFactory.getInstance().getClient(connectionContext);
     String path =
@@ -62,20 +61,20 @@ public class TelemetryPushClient implements ITelemetryPushClient {
     try (CloseableHttpResponse response = httpClient.execute(post)) {
       // TODO: check response and add retry for partial failures
       if (!HttpUtil.isSuccessfulHttpResponse(response)) {
-        LOGGER.debug(
+        LOGGER.trace(
             "Failed to push telemetry logs with error response: {}", response.getStatusLine());
         return;
       }
       TelemetryResponse telResponse =
           objectMapper.readValue(
               EntityUtils.toString(response.getEntity()), TelemetryResponse.class);
-      LOGGER.debug(
+      LOGGER.trace(
           "Pushed Telemetry logs with request-Id {} with events {} with error count {}",
           response.getFirstHeader(REQUEST_ID_HEADER),
           telResponse.getNumProtoSuccess(),
           telResponse.getErrors().size());
       if (!telResponse.getErrors().isEmpty()) {
-        LOGGER.debug("Failed to push telemetry logs with error: {}", telResponse.getErrors());
+        LOGGER.trace("Failed to push telemetry logs with error: {}", telResponse.getErrors());
       }
       if (request.getProtoLogs().size() != telResponse.getNumProtoSuccess()) {
         LOGGER.debug(

@@ -290,11 +290,11 @@ public class DatabricksThriftUtilTest {
         DatabricksThriftUtil.convertColumnarToRowBased(fetchResultsResp, parentStatement, session);
     assertEquals(maxRows, rowBasedData.size());
 
-    maxRows = 0;
+    maxRows = 0; // no limit
     when(parentStatement.getMaxRows()).thenReturn(maxRows);
     rowBasedData =
         DatabricksThriftUtil.convertColumnarToRowBased(fetchResultsResp, parentStatement, session);
-    assertTrue(rowBasedData.isEmpty());
+    assertEquals(4, rowBasedData.size());
 
     maxRows = 5;
     when(parentStatement.getMaxRows()).thenReturn(maxRows);
@@ -321,7 +321,10 @@ public class DatabricksThriftUtilTest {
   @ParameterizedTest
   @MethodSource("thriftDirectResultSets")
   public void testCheckDirectResultsForErrorStatus(TSparkDirectResults response) {
-    assertDoesNotThrow(() -> checkDirectResultsForErrorStatus(response, TEST_STRING));
+    assertDoesNotThrow(
+        () ->
+            checkDirectResultsForErrorStatus(
+                response, TEST_STRING, TEST_STATEMENT_ID.toSQLExecStatementId()));
   }
 
   @Test

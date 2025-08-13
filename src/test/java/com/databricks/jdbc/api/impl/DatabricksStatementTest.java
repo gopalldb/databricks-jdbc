@@ -1,5 +1,6 @@
 package com.databricks.jdbc.api.impl;
 
+import static com.databricks.jdbc.common.EnvironmentVariables.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -117,6 +118,25 @@ public class DatabricksStatementTest {
     assertTrue(statement.isCloseOnCompletion());
     statement.close();
     assertTrue(statement.isClosed());
+  }
+
+  @Test
+  public void testGetUpdateCountForQueries() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+    when(client.executeStatement(
+            eq(STATEMENT),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement)))
+        .thenReturn(resultSet);
+
+    statement.executeQuery(STATEMENT);
+    assertEquals(-1, statement.getUpdateCount());
   }
 
   @Test
@@ -361,6 +381,19 @@ public class DatabricksStatementTest {
   }
 
   @Test
+  public void testGetAndSetMaxRows() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+    statement.setMaxRows(Integer.MAX_VALUE);
+    assertEquals(Integer.MAX_VALUE, statement.getMaxRows());
+    // "no limit"
+    statement.setMaxRows(0);
+    assertEquals(0, statement.getMaxRows());
+  }
+
+  @Test
   public void testGetAndSetLargeMaxRows() throws Exception {
     IDatabricksConnectionContext connectionContext =
         DatabricksConnectionContext.parse(JDBC_URL, new Properties());
@@ -368,6 +401,9 @@ public class DatabricksStatementTest {
     DatabricksStatement statement = new DatabricksStatement(connection);
     statement.setLargeMaxRows(Long.MAX_VALUE);
     assertEquals(Long.MAX_VALUE, statement.getLargeMaxRows());
+    // "no limit"
+    statement.setLargeMaxRows(0);
+    assertEquals(0, statement.getLargeMaxRows());
   }
 
   @Test
