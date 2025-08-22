@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Added support for [SQL Scripting](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-scripting)
 
 ### Updated
 
