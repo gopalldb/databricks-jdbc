@@ -1,5 +1,18 @@
 # Version Changelog
 
+## [v3.0.1] - 2025-09-26
+### Added
+
+### Updated
+- Better collection of Telemetry data due to enhancements in the log and connection close flush logic.
+- Updated Databricks SDK version to v0.65.0 (This is to fix OAuthClient to properly encode complex query parameters.)
+
+### Fixed
+- Fixed state leaking issue in thrift client.
+- Fixed timestamp values returning only milliseconds instead of the full nanosecond precision.
+- Fixed Statement.getUpdateCount() for DML queries.
+---
+
 ## [v1.0.10-oss] - 2025-09-18
 ### Added
 - **Query Tags support**: Added ability to attach key-value tags to SQL queries for analytical purposes that would appear in `system.query.history` table. Example: `jdbc:databricks://host;QUERY_TAGS=team:marketing,dashboard:abc123`. (This feature is in [private preview](https://docs.databricks.com/aws/en/release-notes/release-types#:~:text=Private%20Preview-,Invite%20only,-No))

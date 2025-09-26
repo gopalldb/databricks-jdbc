@@ -1,4 +1,5 @@
 {
-  "freeze": false,
-  "reason": ""
+  "freeze": true,
+  "reason": "Releasing JDBC 3.0.1 - 26th Sep",
+  "allow_list": ["gopall-db"]
 }
