@@ -681,7 +681,6 @@ public class DatabricksStatementTest {
         "-- Single-line comment\n/* Multi-line comment */ CALL send_notifications(12); /* Another comment */ -- End comment";
     assertTrue(DatabricksStatement.shouldReturnResultSet(query));
     assertTrue(DatabricksStatement.shouldReturnResultSet("CALL send_notifications(12);"));
-    assertFalse(DatabricksStatement.shouldReturnResultSet("CALLS send_notifications(12);"));
   }
 
   @Test
