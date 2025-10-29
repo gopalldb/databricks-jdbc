@@ -7,7 +7,7 @@ The release notes summarize enhancements, new features, known issues, workflow c
 Version History ==============================================================
 
 3.0.3 ========================================================================
-Released 2025-10-13
+Released 2025-10-30
 
 Enhancements & New Features
 
