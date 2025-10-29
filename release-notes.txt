@@ -16,7 +16,6 @@ The following issues have been resolved in Databricks JDBC Driver 3.0.3.
 
  * Fixed excessive calls to token endpoint during getToken.
 
-
 3.0.1 ========================================================================
 DEPRECATED, Use v3.0.3 instead
 
