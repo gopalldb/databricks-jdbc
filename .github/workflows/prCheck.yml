@@ -90,7 +90,7 @@ jobs:
       - name: Extract codeCov percentage
         shell: bash
         run: |
-          COVERAGE_FILE="target/site/jacoco/jacoco.xml"
+          COVERAGE_FILE="driver/target/site/jacoco/jacoco.xml"
           COVERED=$(xmllint --xpath "string(//report/counter[@type='INSTRUCTION']/@covered)" "$COVERAGE_FILE")
           MISSED=$(xmllint --xpath "string(//report/counter[@type='INSTRUCTION']/@missed)" "$COVERAGE_FILE")
           TOTAL=$((COVERED + MISSED))

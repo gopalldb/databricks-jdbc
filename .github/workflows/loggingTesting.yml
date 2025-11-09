@@ -46,12 +46,12 @@ jobs:
         shell: bash
         run: |
           # Find the main JAR file dynamically (fat JAR, not thin, not tests)
-          MAIN_JAR=$(find target -maxdepth 1 -name "databricks-jdbc-*.jar" \
+          MAIN_JAR=$(find driver/target -maxdepth 1 -name "databricks-jdbc-*.jar" \
             -not -name "*-thin.jar" \
             -not -name "*-tests.jar" | head -1)
           if [ -z "$MAIN_JAR" ]; then
-            echo "ERROR: Could not find main JAR file in target directory"
-            ls -la target/
+            echo "ERROR: Could not find main JAR file in driver/target directory"
+            ls -la driver/target/
             exit 1
           fi
           echo "Using JAR file: $MAIN_JAR"
@@ -88,18 +88,18 @@ jobs:
       - name: Clean & Compile LoggingTest
         shell: bash
         run: |
-          rm -rf target/test-classes
-          mkdir -p target/test-classes
-          
+          rm -rf driver/target/test-classes
+          mkdir -p driver/target/test-classes
+
           echo "Using JAR file: $MAIN_JAR"
-          
+
           javac \
             -cp "$MAIN_JAR" \
-            -d target/test-classes \
-            src/test/java/com/databricks/client/jdbc/LoggingTest.java
-          
+            -d driver/target/test-classes \
+            driver/src/test/java/com/databricks/client/jdbc/LoggingTest.java
+
           echo "==== Checking compiled classes ===="
-          find target/test-classes -type f
+          find driver/target/test-classes -type f
 
       - name: Run LoggingTest
         shell: bash
@@ -109,8 +109,8 @@ jobs:
           if [[ "$OS_TYPE" == "linux" ]]; then SEP=":"; else SEP=";"; fi
           echo "Using classpath separator: '$SEP'"
           echo "Using JAR file: $MAIN_JAR"
-          
-          CP="target/test-classes${SEP}$MAIN_JAR"
+
+          CP="driver/target/test-classes${SEP}$MAIN_JAR"
           
           java \
             --add-opens=java.base/java.nio=ALL-UNNAMED \

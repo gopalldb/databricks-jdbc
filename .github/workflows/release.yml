@@ -43,4 +43,4 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            files: target/*.jar
+            driver/target/*.jar
