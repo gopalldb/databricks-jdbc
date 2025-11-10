@@ -34,7 +34,7 @@ jobs:
           ${{ runner.os }}-m2-
         
     - name: Run tests with coverage
-      run: mvn clean test jacoco:report -pl driver
+      run: cd driver && mvn clean test jacoco:report
       
     - name: Check for coverage override
       id: override

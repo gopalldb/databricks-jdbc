@@ -39,7 +39,7 @@ jobs:
           restore-keys: ${{ runner.os }}-m2
 
       - name: Check formatting
-        run: mvn --errors spotless:check -pl driver
+        run: cd driver && mvn --errors spotless:check
 
   unit-tests:
     strategy:
@@ -78,14 +78,14 @@ jobs:
 
       - name: Check Unit Tests
         shell: bash
-        run: mvn test -Dtest='!**/integration/**,!**/DatabricksDriverExamples.java,!**/ProxyTest.java,!**/LoggingTest.java,!**/SSLTest.java'
+        run: mvn test -pl driver -Dtest='!**/integration/**,!**/DatabricksDriverExamples.java,!**/ProxyTest.java,!**/LoggingTest.java,!**/SSLTest.java'
 
       - name: Install xmllint
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
 
       - name: JaCoCo report
-        run: mvn --batch-mode --errors jacoco:report --file pom.xml
+        run: mvn --batch-mode --errors jacoco:report --file pom.xml -pl driver
 
       - name: Extract codeCov percentage
         shell: bash
