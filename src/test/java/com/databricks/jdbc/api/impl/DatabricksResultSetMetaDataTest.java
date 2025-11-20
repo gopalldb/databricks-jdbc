@@ -652,4 +652,109 @@ public class DatabricksResultSetMetaDataTest {
     assertEquals("STRING", metaData.getColumnTypeName(4));
     assertEquals(Types.VARCHAR, metaData.getColumnType(4));
   }
+
+  @Test
+  public void testThriftGeometryColumnConvertedToStringWhenFlagDisabled() throws SQLException {
+    // Mock connection context with geospatial support disabled
+    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+
+    TGetResultSetMetadataResp resultManifest = new TGetResultSetMetadataResp();
+    TColumnDesc columnDesc = new TColumnDesc().setColumnName("location");
+    TTypeDesc typeDesc = new TTypeDesc();
+    TTypeEntry typeEntry = new TTypeEntry();
+    TPrimitiveTypeEntry primitiveEntry = new TPrimitiveTypeEntry(TTypeId.STRING_TYPE);
+    typeEntry.setPrimitiveEntry(primitiveEntry);
+    typeDesc.setTypes(Collections.singletonList(typeEntry));
+    columnDesc.setTypeDesc(typeDesc);
+    TTableSchema schema = new TTableSchema().setColumns(Collections.singletonList(columnDesc));
+    resultManifest.setSchema(schema);
+
+    // Arrow metadata indicates this is a GEOMETRY column
+    List<String> arrowMetadata = List.of("GEOMETRY");
+
+    DatabricksResultSetMetaData metaData =
+        new DatabricksResultSetMetaData(
+            THRIFT_STATEMENT_ID, resultManifest, 1, 1, arrowMetadata, connectionContext);
+
+    // Verify GEOMETRY column is converted to STRING
+    assertEquals("location", metaData.getColumnName(1));
+    assertEquals("STRING", metaData.getColumnTypeName(1));
+    assertEquals(Types.VARCHAR, metaData.getColumnType(1));
+    assertEquals("java.lang.String", metaData.getColumnClassName(1));
+  }
+
+  @Test
+  public void testThriftGeographyColumnConvertedToStringWhenFlagDisabled() throws SQLException {
+    // Mock connection context with geospatial support disabled
+    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+
+    TGetResultSetMetadataResp resultManifest = new TGetResultSetMetadataResp();
+    TColumnDesc columnDesc = new TColumnDesc().setColumnName("region");
+    TTypeDesc typeDesc = new TTypeDesc();
+    TTypeEntry typeEntry = new TTypeEntry();
+    TPrimitiveTypeEntry primitiveEntry = new TPrimitiveTypeEntry(TTypeId.STRING_TYPE);
+    typeEntry.setPrimitiveEntry(primitiveEntry);
+    typeDesc.setTypes(Collections.singletonList(typeEntry));
+    columnDesc.setTypeDesc(typeDesc);
+    TTableSchema schema = new TTableSchema().setColumns(Collections.singletonList(columnDesc));
+    resultManifest.setSchema(schema);
+
+    // Arrow metadata indicates this is a GEOGRAPHY column
+    List<String> arrowMetadata = List.of("GEOGRAPHY");
+
+    DatabricksResultSetMetaData metaData =
+        new DatabricksResultSetMetaData(
+            THRIFT_STATEMENT_ID, resultManifest, 1, 1, arrowMetadata, connectionContext);
+
+    // Verify GEOGRAPHY column is converted to STRING
+    assertEquals("region", metaData.getColumnName(1));
+    assertEquals("STRING", metaData.getColumnTypeName(1));
+    assertEquals(Types.VARCHAR, metaData.getColumnType(1));
+    assertEquals("java.lang.String", metaData.getColumnClassName(1));
+  }
+
+  @Test
+  public void testThriftGeospatialColumnsRetainedWhenFlagEnabled() throws SQLException {
+    // Mock connection context with geospatial support enabled
+    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(true);
+
+    TGetResultSetMetadataResp resultManifest = new TGetResultSetMetadataResp();
+
+    // Create two columns - one GEOMETRY, one GEOGRAPHY
+    TColumnDesc geometryColumn = new TColumnDesc().setColumnName("location").setPosition(1);
+    TTypeDesc geometryTypeDesc = new TTypeDesc();
+    TTypeEntry geometryTypeEntry = new TTypeEntry();
+    TPrimitiveTypeEntry geometryPrimitiveEntry = new TPrimitiveTypeEntry(TTypeId.STRING_TYPE);
+    geometryTypeEntry.setPrimitiveEntry(geometryPrimitiveEntry);
+    geometryTypeDesc.setTypes(Collections.singletonList(geometryTypeEntry));
+    geometryColumn.setTypeDesc(geometryTypeDesc);
+
+    TColumnDesc geographyColumn = new TColumnDesc().setColumnName("region").setPosition(2);
+    TTypeDesc geographyTypeDesc = new TTypeDesc();
+    TTypeEntry geographyTypeEntry = new TTypeEntry();
+    TPrimitiveTypeEntry geographyPrimitiveEntry = new TPrimitiveTypeEntry(TTypeId.STRING_TYPE);
+    geographyTypeEntry.setPrimitiveEntry(geographyPrimitiveEntry);
+    geographyTypeDesc.setTypes(Collections.singletonList(geographyTypeEntry));
+    geographyColumn.setTypeDesc(geographyTypeDesc);
+
+    TTableSchema schema = new TTableSchema().setColumns(List.of(geometryColumn, geographyColumn));
+    resultManifest.setSchema(schema);
+
+    // Arrow metadata indicates geospatial types
+    List<String> arrowMetadata = List.of("GEOMETRY", "GEOGRAPHY");
+
+    DatabricksResultSetMetaData metaData =
+        new DatabricksResultSetMetaData(
+            THRIFT_STATEMENT_ID, resultManifest, 1, 1, arrowMetadata, connectionContext);
+
+    // Verify GEOMETRY column retains its type
+    assertEquals("location", metaData.getColumnName(1));
+    assertEquals("GEOMETRY", metaData.getColumnTypeName(1));
+    assertEquals(Types.OTHER, metaData.getColumnType(1));
+
+    // Verify GEOGRAPHY column retains its type
+    assertEquals("region", metaData.getColumnName(2));
+    assertEquals("GEOGRAPHY", metaData.getColumnTypeName(2));
+    assertEquals(Types.OTHER, metaData.getColumnType(2));
+  }
 }

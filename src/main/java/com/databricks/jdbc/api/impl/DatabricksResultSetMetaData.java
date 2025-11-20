@@ -222,16 +222,31 @@ public class DatabricksResultSetMetaData implements ResultSetMetaData {
                 .columnTypeClassName("java.lang.String")
                 .columnType(Types.OTHER)
                 .columnTypeText(VARIANT);
-          } else if (isGeometryColumn(arrowMetadata, columnIndex)) {
+          } else if (isGeometryColumn(arrowMetadata, columnIndex)
+              && ctx.isGeoSpatialSupportEnabled()) {
+            // Only set GEOMETRY type if geospatial support is enabled
             columnBuilder
                 .columnTypeClassName(GEOMETRY_CLASS_NAME)
                 .columnType(Types.OTHER)
                 .columnTypeText(GEOMETRY);
-          } else if (isGeographyColumn(arrowMetadata, columnIndex)) {
+          } else if (isGeographyColumn(arrowMetadata, columnIndex)
+              && ctx.isGeoSpatialSupportEnabled()) {
+            // Only set GEOGRAPHY type if geospatial support is enabled
             columnBuilder
                 .columnTypeClassName(GEOGRAPHY_CLASS_NAME)
                 .columnType(Types.OTHER)
                 .columnTypeText(GEOGRAPHY);
+          } else if ((isGeometryColumn(arrowMetadata, columnIndex)
+                  || isGeographyColumn(arrowMetadata, columnIndex))
+              && !ctx.isGeoSpatialSupportEnabled()) {
+            // Convert geospatial types to STRING when support is disabled
+            LOGGER.debug(
+                "Geospatial support is disabled, converting column {} to STRING in Thrift metadata",
+                columnInfo.getName());
+            columnBuilder
+                .columnTypeClassName("java.lang.String")
+                .columnType(Types.VARCHAR)
+                .columnTypeText("STRING");
           }
           columnsBuilder.add(columnBuilder.build());
           columnNameToIndexMap.putIfAbsent(columnInfo.getName(), ++currIndex);
