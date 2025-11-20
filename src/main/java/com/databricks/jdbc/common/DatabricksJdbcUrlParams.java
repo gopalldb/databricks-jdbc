@@ -95,6 +95,7 @@ public enum DatabricksJdbcUrlParams {
       "1"), // Note : telemetry enablement also depends on the server flag.
   TELEMETRY_BATCH_SIZE("TelemetryBatchSize", "Batch size for telemetry", "200"),
   MAX_BATCH_SIZE("MaxBatchSize", "Maximum batch size", "500"),
+  BATCH_INSERT_SIZE("BatchInsertSize", "Maximum number of rows per batch insert execution", "1000"),
   ALLOWED_VOLUME_INGESTION_PATHS("VolumeOperationAllowedLocalPaths", ""),
   ALLOWED_STAGING_INGESTION_PATHS("StagingAllowedLocalPaths", ""),
   UC_INGESTION_RETRIABLE_HTTP_CODE(
@@ -165,12 +166,21 @@ public enum DatabricksJdbcUrlParams {
       "Enable SQL query execution for connection validation in isValid() method",
       "0"),
   IGNORE_TRANSACTIONS("IgnoreTransactions", "Ignore transaction-related method calls", "0"),
+  FETCH_AUTOCOMMIT_FROM_SERVER(
+      "FetchAutoCommitFromServer",
+      "Fetch auto-commit state from server using SQL query instead of using cached value",
+      "0"),
   ENABLE_METRIC_VIEW_METADATA("EnableMetricViewMetadata", "Enable metric view metadata", "0"),
   ENABLE_MULTIPLE_CATALOG_SUPPORT(
       "enableMultipleCatalogSupport", "Enable multiple catalog support", "1"),
+  ENABLE_CLOUD_FETCH("EnableQueryResultDownload", "Enable Cloud Fetch", "1"),
   ENABLE_SEA_SYNC_METADATA(
       "EnableSeaSyncMetadata",
       "Enable x-databricks-sea-can-run-fully-sync header for synchronous metadata requests in SEA mode",
+      "1"),
+  DISABLE_OAUTH_REFRESH_TOKEN(
+      "DisableOauthRefreshToken",
+      "Disable requesting OAuth refresh tokens (omit offline_access unless explicitly provided)",
       "1");
 
   private final String paramName;

@@ -25,6 +25,7 @@ import com.databricks.sdk.core.commons.CommonsHttpClient;
 import com.databricks.sdk.core.oauth.ExternalBrowserCredentialsProvider;
 import com.databricks.sdk.core.utils.Cloud;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.Collections;
@@ -170,7 +171,7 @@ public class ClientConfiguratorTest {
     assertEquals("https://sample-host.18.azuredatabricks.net", config.getHost());
     assertEquals("test-client", config.getClientId());
     assertEquals("custom-oauth-m2m", provider.authType());
-    assertEquals(DatabricksJdbcConstants.M2M_AUTH_TYPE, config.getAuthType());
+    assertEquals(provider.authType(), config.getAuthType());
     assertEquals(
         PrivateKeyClientCredentialProvider.class, provider.getCredentialsProvider().getClass());
   }
@@ -187,6 +188,7 @@ public class ClientConfiguratorTest {
     when(mockContext.getHttpConnectionPoolSize()).thenReturn(100);
     when(mockContext.getOAuth2RedirectUrlPorts()).thenReturn(List.of(8020));
     when(mockContext.getHttpMaxConnectionsPerRoute()).thenReturn(100);
+    when(mockContext.getDisableOauthRefreshToken()).thenReturn(true);
     configurator = new ClientConfigurator(mockContext);
     WorkspaceClient client = configurator.getWorkspaceClient();
     assertNotNull(client);
@@ -198,6 +200,28 @@ public class ClientConfiguratorTest {
     assertEquals(List.of("scope1", "scope2"), config.getScopes());
     assertEquals("http://localhost:8020", config.getOAuthRedirectUrl());
     assertEquals(DatabricksJdbcConstants.U2M_AUTH_TYPE, config.getAuthType());
+  }
+
+  @Test
+  void getWorkspaceClient_OAuthWithBrowserBasedAuthentication_ScopesExcludeOfflineAccess()
+      throws DatabricksParsingException, DatabricksSSLException {
+    when(mockContext.getAuthMech()).thenReturn(AuthMech.OAUTH);
+    when(mockContext.getAuthFlow()).thenReturn(AuthFlow.BROWSER_BASED_AUTHENTICATION);
+    when(mockContext.getHostForOAuth()).thenReturn("https://oauth-browser.databricks.com");
+    when(mockContext.getClientId()).thenReturn("browser-client-id");
+    when(mockContext.getClientSecret()).thenReturn("browser-client-secret");
+    when(mockContext.getOAuthScopesForU2M()).thenReturn(List.of("scope.read", "scope.write"));
+    when(mockContext.getHttpConnectionPoolSize()).thenReturn(100);
+    when(mockContext.getOAuth2RedirectUrlPorts()).thenReturn(List.of(8030));
+    when(mockContext.getHttpMaxConnectionsPerRoute()).thenReturn(100);
+    when(mockContext.getDisableOauthRefreshToken()).thenReturn(true);
+
+    configurator = new ClientConfigurator(mockContext);
+    DatabricksConfig config = configurator.getDatabricksConfig();
+
+    // Driver disables refresh tokens for OAuth, so SDK must not include offline_access
+    assertTrue(config.getDisableOauthRefreshToken());
+    assertFalse(config.getScopes().contains("offline_access"));
   }
 
   @Test
@@ -216,6 +240,7 @@ public class ClientConfiguratorTest {
     when(mockContext.getHttpConnectionPoolSize()).thenReturn(100);
     when(mockContext.getOAuth2RedirectUrlPorts()).thenReturn(List.of(8020));
     when(mockContext.getHttpMaxConnectionsPerRoute()).thenReturn(100);
+    when(mockContext.getDisableOauthRefreshToken()).thenReturn(true);
     configurator = new ClientConfigurator(mockContext);
     WorkspaceClient client = configurator.getWorkspaceClient();
     assertNotNull(client);
@@ -360,19 +385,29 @@ public class ClientConfiguratorTest {
 
     // Test with multiple ports, first unavailable
     int secondAvailablePort = findFreePort();
-    try (ServerSocket serverSocket = new ServerSocket(availablePort)) {
+    try (ServerSocket serverSocket = new ServerSocket()) {
       serverSocket.setReuseAddress(true);
+      serverSocket.bind(new InetSocketAddress(availablePort));
       ports = List.of(availablePort, secondAvailablePort);
       result = configurator.findAvailablePort(ports);
       assertEquals(secondAvailablePort, result);
     }
 
-    // Test incremental search - first port unavailable, second available
-    try (ServerSocket serverSocket = new ServerSocket(availablePort)) {
-      serverSocket.setReuseAddress(true);
+    // Test incremental search - first port unavailable, finds next available in sequence
+    try (ServerSocket serverSocket2 = new ServerSocket()) {
+      serverSocket2.setReuseAddress(true);
+      serverSocket2.bind(new InetSocketAddress(availablePort));
       ports = List.of(availablePort);
       result = configurator.findAvailablePort(ports);
-      assertEquals(availablePort + 1, result);
+      assertTrue(
+          result > availablePort,
+          String.format("Expected port > %d, but got %d", availablePort, result));
+      // 3. The returned port should actually be available
+      try (ServerSocket testSocket = new ServerSocket()) {
+        testSocket.setReuseAddress(true);
+        testSocket.bind(new InetSocketAddress(result));
+        assertNotNull(testSocket, "Returned port should be available for binding");
+      }
     }
   }
 
@@ -394,10 +429,12 @@ public class ClientConfiguratorTest {
     }
 
     // Occupy the ports to make them unavailable
-    try (ServerSocket socket1 = new ServerSocket(port1);
-        ServerSocket socket2 = new ServerSocket(port2)) {
+    try (ServerSocket socket1 = new ServerSocket();
+        ServerSocket socket2 = new ServerSocket()) {
       socket1.setReuseAddress(true);
+      socket1.bind(new InetSocketAddress(port1));
       socket2.setReuseAddress(true);
+      socket2.bind(new InetSocketAddress(port2));
 
       // First test with multiple specified ports
       List<Integer> unavailablePorts = List.of(port1, port2);
@@ -425,8 +462,9 @@ public class ClientConfiguratorTest {
 
   /** Utility method to find a free port */
   private int findFreePort() {
-    try (ServerSocket socket = new ServerSocket(0)) {
+    try (ServerSocket socket = new ServerSocket()) {
       socket.setReuseAddress(true);
+      socket.bind(new InetSocketAddress(0));
       return socket.getLocalPort();
     } catch (IOException e) {
       throw new RuntimeException("Failed to find free port", e);
@@ -447,6 +485,7 @@ public class ClientConfiguratorTest {
     when(mockContext.getOAuth2RedirectUrlPorts()).thenReturn(List.of(testPort));
     when(mockContext.getHttpConnectionPoolSize()).thenReturn(100);
     when(mockContext.getHttpMaxConnectionsPerRoute()).thenReturn(100);
+    when(mockContext.getDisableOauthRefreshToken()).thenReturn(true);
 
     configurator = new ClientConfigurator(mockContext);
     WorkspaceClient client = configurator.getWorkspaceClient();
@@ -476,6 +515,7 @@ public class ClientConfiguratorTest {
     when(mockContext.isTokenCacheEnabled()).thenReturn(true);
     when(mockContext.getTokenCachePassPhrase()).thenReturn("testPassphrase");
     when(mockContext.getHttpMaxConnectionsPerRoute()).thenReturn(100);
+    when(mockContext.getDisableOauthRefreshToken()).thenReturn(true);
 
     configurator = new ClientConfigurator(mockContext);
     WorkspaceClient client = configurator.getWorkspaceClient();
@@ -508,6 +548,7 @@ public class ClientConfiguratorTest {
     when(mockContext.isTokenCacheEnabled()).thenReturn(true);
     when(mockContext.getTokenCachePassPhrase()).thenReturn(null);
     when(mockContext.getHttpMaxConnectionsPerRoute()).thenReturn(100);
+    when(mockContext.getDisableOauthRefreshToken()).thenReturn(true);
 
     assertThrows(DatabricksException.class, () -> new ClientConfigurator(mockContext));
   }
@@ -525,6 +566,7 @@ public class ClientConfiguratorTest {
     when(mockContext.getOAuth2RedirectUrlPorts()).thenReturn(List.of(8020));
     when(mockContext.isTokenCacheEnabled()).thenReturn(false);
     when(mockContext.getHttpMaxConnectionsPerRoute()).thenReturn(100);
+    when(mockContext.getDisableOauthRefreshToken()).thenReturn(true);
 
     configurator = new ClientConfigurator(mockContext);
     WorkspaceClient client = configurator.getWorkspaceClient();

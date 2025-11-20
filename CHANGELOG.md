@@ -1,6 +1,33 @@
 # Version Changelog
+## [v3.0.4] - 2025-11-12
 
-## [v3.0.1] - 2025-10-13
+### Added
+- Added support for geospatial data types.
+- Added support for telemetry log levels, which can be controlled via the connection parameter `TelemetryLogLevel`. This allows users to configure the verbosity of telemetry logging from OFF to TRACE.
+- Added full support for JDBC transaction control methods in Databricks. Transaction support in Databricks is currently available as a Private Preview. The `IgnoreTransactions` connection parameter can be set to `1` to disable or no-op transaction control methods.
+- Added a new config attribute `DisableOauthRefreshToken` to control whether refresh tokens are requested in OAuth exchanges. By default, the driver does not include the `offline_access` scope. If `offline_access` is explicitly provided by the user, it is preserved and not removed.
+
+### Updated
+- Updated sdk version from 0.65.0 to 0.69.0
+
+### Fixed
+- Fixed SQL syntax error when LIKE queries contain empty ESCAPE clauses.
+- Fix: driver failing to authenticate on token update in U2M flow.
+- Fix: driver failing to parse complex data types with nullable attributes.
+- Fixed: Resolved SDK token-caching regression causing token refresh on every call. SDK is now configured once to avoid excessive token endpoint hits and rate limiting.
+- Fixed: TimestampConverter.toString() returning ISO8601 format with timezone conversion instead of SQL standard format.
+- Fixed: Driver not loading complete JSON result in the case of SEA Inline without Arrow
+---
+
+## [v3.0.3] - 2025-10-30
+### Added
+
+### Updated
+
+### Fixed
+- Fixed token endpoint regression, which caused excessive token refresh calls
+
+## [v3.0.1] - 2025-10-13: DEPRECATED, Use v3.0.3 instead 
 ### Added
 - Added `enableMultipleCatalogSupport` connection parameter to control catalog metadata behavior.
 
@@ -11,7 +38,7 @@
 - Fixed ComplexDataTypeParser to correctly parse ISO timestamps with T separators and timezone offsets, preventing Arrow ingestion failures.
 ---
 
-## [v1.0.11-oss] - 2025-10-06
+## [v1.0.11-oss] - 2025-10-06: DEPRECATED, Use v3.0.3 instead
 
 ### Added
 - Enabled direct results by default in SEA mode to improve latency for short and small queries.
@@ -27,7 +54,7 @@
 - Fixed Statement.getUpdateCount() for DML queries.
 ---
 
-## [v1.0.10-oss] - 2025-09-18
+## [v1.0.10-oss] - 2025-09-18: DEPRECATED, Use v3.0.3 instead
 ### Added
 - **Query Tags support**: Added ability to attach key-value tags to SQL queries for analytical purposes that would appear in `system.query.history` table. Example: `jdbc:databricks://host;QUERY_TAGS=team:marketing,dashboard:abc123`. (This feature is in [private preview](https://docs.databricks.com/aws/en/release-notes/release-types#:~:text=Private%20Preview-,Invite%20only,-No))
 - **SQL Scripting support**: Added support for [SQL Scripting](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-scripting)
