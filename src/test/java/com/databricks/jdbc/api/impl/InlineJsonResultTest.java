@@ -35,7 +35,9 @@ class InlineJsonResultTest {
 
   @BeforeEach
   void setUp() {
-    when(session.getConnectionContext()).thenReturn(connectionContext);
+    // Note: InlineJsonResult for JSON format doesn't actually check the geospatial flag
+    // because JSON data is already stored as strings. These tests document expected behavior.
+    lenient().when(session.getConnectionContext()).thenReturn(connectionContext);
   }
 
   private ResultManifest createManifestWithColumns(List<ColumnInfo> columns) {
@@ -74,8 +76,7 @@ class InlineJsonResultTest {
     when(resultData.getDataArray()).thenReturn(dataArray);
     when(resultData.getChunkIndex()).thenReturn(0L);
 
-    // Disable geospatial support
-    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+    // Note: JSON format doesn't need geospatial flag check - data is already strings
 
     // Create InlineJsonResult
     InlineJsonResult result = new InlineJsonResult(manifest, resultData, STATEMENT_ID, session);
@@ -104,8 +105,7 @@ class InlineJsonResultTest {
     when(resultData.getDataArray()).thenReturn(dataArray);
     when(resultData.getChunkIndex()).thenReturn(0L);
 
-    // Disable geospatial support
-    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+    // Note: JSON format doesn't need geospatial flag check - data is already strings
 
     // Create InlineJsonResult
     InlineJsonResult result = new InlineJsonResult(manifest, resultData, STATEMENT_ID, session);
@@ -135,8 +135,7 @@ class InlineJsonResultTest {
     when(resultData.getDataArray()).thenReturn(dataArray);
     when(resultData.getChunkIndex()).thenReturn(0L);
 
-    // Enable geospatial support
-    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(true);
+    // Note: JSON format doesn't need geospatial flag check - data is already strings
 
     // Create InlineJsonResult
     InlineJsonResult result = new InlineJsonResult(manifest, resultData, STATEMENT_ID, session);
@@ -175,8 +174,7 @@ class InlineJsonResultTest {
     when(resultData.getDataArray()).thenReturn(dataArray);
     when(resultData.getChunkIndex()).thenReturn(0L);
 
-    // Disable geospatial support
-    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+    // Note: JSON format doesn't need geospatial flag check - data is already strings
 
     // Create InlineJsonResult
     InlineJsonResult result = new InlineJsonResult(manifest, resultData, STATEMENT_ID, session);
@@ -218,8 +216,7 @@ class InlineJsonResultTest {
     when(resultData.getDataArray()).thenReturn(dataArray);
     when(resultData.getChunkIndex()).thenReturn(0L);
 
-    // Disable geospatial support
-    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+    // Note: JSON format doesn't need geospatial flag check - data is already strings
 
     // Create InlineJsonResult
     InlineJsonResult result = new InlineJsonResult(manifest, resultData, STATEMENT_ID, session);
@@ -250,8 +247,7 @@ class InlineJsonResultTest {
     when(resultData.getDataArray()).thenReturn(dataArray);
     when(resultData.getChunkIndex()).thenReturn(0L);
 
-    // Disable geospatial support
-    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+    // Note: JSON format doesn't need geospatial flag check - data is already strings
 
     // Create InlineJsonResult
     InlineJsonResult result = new InlineJsonResult(manifest, resultData, STATEMENT_ID, session);
@@ -309,8 +305,7 @@ class InlineJsonResultTest {
     when(resultData.getDataArray()).thenReturn(jsonArrayData);
     when(resultData.getChunkIndex()).thenReturn(0L);
 
-    // Disable geospatial support
-    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+    // Note: JSON format doesn't need geospatial flag check - data is already strings
 
     // Create InlineJsonResult with JSON_ARRAY format
     InlineJsonResult result = new InlineJsonResult(manifest, resultData, STATEMENT_ID, session);
@@ -356,8 +351,7 @@ class InlineJsonResultTest {
     when(resultData.getDataArray()).thenReturn(jsonArrayData);
     when(resultData.getChunkIndex()).thenReturn(0L);
 
-    // Enable geospatial support
-    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(true);
+    // Note: JSON format doesn't need geospatial flag check - data is already strings
 
     // Create InlineJsonResult
     InlineJsonResult result = new InlineJsonResult(manifest, resultData, STATEMENT_ID, session);
@@ -405,12 +399,9 @@ class InlineJsonResultTest {
     when(resultData.getDataArray()).thenReturn(jsonArrayData);
     when(resultData.getChunkIndex()).thenReturn(0L);
 
-    // Explicitly enable complex data type support (EnableComplexDatatypeSupport=1)
-    // Mark as lenient since InlineJsonResult doesn't directly check this flag,
-    // but we want to document the test scenario explicitly
-    lenient().when(connectionContext.isComplexDatatypeSupportEnabled()).thenReturn(true);
-    // Disable geospatial support (EnableGeoSpatialSupport=0)
-    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+    // Note: This test documents the scenario where EnableComplexDatatypeSupport=1
+    // but EnableGeoSpatialSupport=0. However, InlineJsonResult doesn't check these flags
+    // because JSON format already stores geospatial data as strings.
 
     // Create InlineJsonResult
     InlineJsonResult result = new InlineJsonResult(manifest, resultData, STATEMENT_ID, session);
