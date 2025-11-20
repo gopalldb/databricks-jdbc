@@ -654,6 +654,53 @@ public class DatabricksResultSetMetaDataTest {
   }
 
   @Test
+  public void testJsonArrayFormatMetadataWithGeospatialFlagDisabled() throws SQLException {
+    // This test explicitly verifies that metadata returns STRING for geospatial columns
+    // when using JSON_ARRAY format (SQL Exec API with JSON format)
+
+    // Mock connection context with geospatial support disabled
+    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+
+    ResultManifest resultManifest = new ResultManifest();
+    resultManifest.setTotalRowCount(2L);
+    // Explicitly set format to JSON_ARRAY to test SQL Exec API JSON format
+    resultManifest.setFormat(com.databricks.sdk.service.sql.Format.JSON_ARRAY);
+
+    ResultSchema schema = new ResultSchema();
+    schema.setColumnCount(3L);
+
+    ColumnInfo idColumn = getColumn("store_id", ColumnInfoTypeName.INT, "INT");
+    ColumnInfo geometryColumn =
+        getColumn("store_location", ColumnInfoTypeName.GEOMETRY, "GEOMETRY");
+    ColumnInfo geographyColumn =
+        getColumn("delivery_region", ColumnInfoTypeName.GEOGRAPHY, "GEOGRAPHY");
+
+    schema.setColumns(List.of(idColumn, geometryColumn, geographyColumn));
+    resultManifest.setSchema(schema);
+
+    DatabricksResultSetMetaData metaData =
+        new DatabricksResultSetMetaData(STATEMENT_ID, resultManifest, false, connectionContext);
+
+    // Verify non-geospatial column is not affected
+    assertEquals("store_id", metaData.getColumnName(1));
+    assertEquals("INT", metaData.getColumnTypeName(1));
+    assertEquals(Types.INTEGER, metaData.getColumnType(1));
+    assertEquals("java.lang.Integer", metaData.getColumnClassName(1));
+
+    // Verify GEOMETRY column metadata returns STRING (not GEOMETRY)
+    assertEquals("store_location", metaData.getColumnName(2));
+    assertEquals("STRING", metaData.getColumnTypeName(2));
+    assertEquals(Types.VARCHAR, metaData.getColumnType(2));
+    assertEquals("java.lang.String", metaData.getColumnClassName(2));
+
+    // Verify GEOGRAPHY column metadata returns STRING (not GEOGRAPHY)
+    assertEquals("delivery_region", metaData.getColumnName(3));
+    assertEquals("STRING", metaData.getColumnTypeName(3));
+    assertEquals(Types.VARCHAR, metaData.getColumnType(3));
+    assertEquals("java.lang.String", metaData.getColumnClassName(3));
+  }
+
+  @Test
   public void testThriftGeometryColumnConvertedToStringWhenFlagDisabled() throws SQLException {
     // Mock connection context with geospatial support disabled
     when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
