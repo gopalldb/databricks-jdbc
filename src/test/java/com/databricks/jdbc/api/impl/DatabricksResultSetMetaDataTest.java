@@ -544,4 +544,112 @@ public class DatabricksResultSetMetaDataTest {
       assertFalse(metaData.isCaseSensitive(i));
     }
   }
+
+  @Test
+  public void testGeospatialTypesConvertedToStringWhenFlagDisabled() throws SQLException {
+    // Mock connection context with geospatial support disabled
+    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+
+    ResultManifest resultManifest = new ResultManifest();
+    resultManifest.setTotalRowCount(1L);
+    ResultSchema schema = new ResultSchema();
+    schema.setColumnCount(2L);
+
+    ColumnInfo geometryColumn = getColumn("geom_col", ColumnInfoTypeName.GEOMETRY, "GEOMETRY");
+    ColumnInfo geographyColumn = getColumn("geog_col", ColumnInfoTypeName.GEOGRAPHY, "GEOGRAPHY");
+
+    schema.setColumns(List.of(geometryColumn, geographyColumn));
+    resultManifest.setSchema(schema);
+
+    DatabricksResultSetMetaData metaData =
+        new DatabricksResultSetMetaData(STATEMENT_ID, resultManifest, false, connectionContext);
+
+    // Verify GEOMETRY column is converted to STRING
+    assertEquals("geom_col", metaData.getColumnName(1));
+    assertEquals("STRING", metaData.getColumnTypeName(1));
+    assertEquals(Types.VARCHAR, metaData.getColumnType(1));
+    assertEquals("java.lang.String", metaData.getColumnClassName(1));
+
+    // Verify GEOGRAPHY column is converted to STRING
+    assertEquals("geog_col", metaData.getColumnName(2));
+    assertEquals("STRING", metaData.getColumnTypeName(2));
+    assertEquals(Types.VARCHAR, metaData.getColumnType(2));
+    assertEquals("java.lang.String", metaData.getColumnClassName(2));
+  }
+
+  @Test
+  public void testGeospatialTypesRetainedWhenFlagEnabled() throws SQLException {
+    // Mock connection context with geospatial support enabled
+    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(true);
+
+    ResultManifest resultManifest = new ResultManifest();
+    resultManifest.setTotalRowCount(1L);
+    ResultSchema schema = new ResultSchema();
+    schema.setColumnCount(2L);
+
+    ColumnInfo geometryColumn = getColumn("geom_col", ColumnInfoTypeName.GEOMETRY, "GEOMETRY");
+    ColumnInfo geographyColumn = getColumn("geog_col", ColumnInfoTypeName.GEOGRAPHY, "GEOGRAPHY");
+
+    schema.setColumns(List.of(geometryColumn, geographyColumn));
+    resultManifest.setSchema(schema);
+
+    DatabricksResultSetMetaData metaData =
+        new DatabricksResultSetMetaData(STATEMENT_ID, resultManifest, false, connectionContext);
+
+    // Verify GEOMETRY column retains its type
+    assertEquals("geom_col", metaData.getColumnName(1));
+    assertEquals("GEOMETRY", metaData.getColumnTypeName(1));
+    assertEquals(Types.OTHER, metaData.getColumnType(1));
+    assertEquals(
+        DatabricksTypeUtil.getColumnTypeClassName(ColumnInfoTypeName.GEOMETRY),
+        metaData.getColumnClassName(1));
+
+    // Verify GEOGRAPHY column retains its type
+    assertEquals("geog_col", metaData.getColumnName(2));
+    assertEquals("GEOGRAPHY", metaData.getColumnTypeName(2));
+    assertEquals(Types.OTHER, metaData.getColumnType(2));
+    assertEquals(
+        DatabricksTypeUtil.getColumnTypeClassName(ColumnInfoTypeName.GEOGRAPHY),
+        metaData.getColumnClassName(2));
+  }
+
+  @Test
+  public void testMixedColumnsWithGeospatialFlagDisabled() throws SQLException {
+    // Mock connection context with geospatial support disabled
+    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+
+    ResultManifest resultManifest = new ResultManifest();
+    resultManifest.setTotalRowCount(1L);
+    ResultSchema schema = new ResultSchema();
+    schema.setColumnCount(4L);
+
+    ColumnInfo intColumn = getColumn("id", ColumnInfoTypeName.INT, "INT");
+    ColumnInfo stringColumn = getColumn("name", ColumnInfoTypeName.STRING, "STRING");
+    ColumnInfo geometryColumn = getColumn("location", ColumnInfoTypeName.GEOMETRY, "GEOMETRY");
+    ColumnInfo geographyColumn = getColumn("region", ColumnInfoTypeName.GEOGRAPHY, "GEOGRAPHY");
+
+    schema.setColumns(List.of(intColumn, stringColumn, geometryColumn, geographyColumn));
+    resultManifest.setSchema(schema);
+
+    DatabricksResultSetMetaData metaData =
+        new DatabricksResultSetMetaData(STATEMENT_ID, resultManifest, false, connectionContext);
+
+    // Verify non-geospatial columns are not affected
+    assertEquals("id", metaData.getColumnName(1));
+    assertEquals("INT", metaData.getColumnTypeName(1));
+    assertEquals(Types.INTEGER, metaData.getColumnType(1));
+
+    assertEquals("name", metaData.getColumnName(2));
+    assertEquals("STRING", metaData.getColumnTypeName(2));
+    assertEquals(Types.VARCHAR, metaData.getColumnType(2));
+
+    // Verify geospatial columns are converted to STRING
+    assertEquals("location", metaData.getColumnName(3));
+    assertEquals("STRING", metaData.getColumnTypeName(3));
+    assertEquals(Types.VARCHAR, metaData.getColumnType(3));
+
+    assertEquals("region", metaData.getColumnName(4));
+    assertEquals("STRING", metaData.getColumnTypeName(4));
+    assertEquals(Types.VARCHAR, metaData.getColumnType(4));
+  }
 }

@@ -95,6 +95,18 @@ public class DatabricksResultSetMetaData implements ResultSetMetaData {
             columnTypeName = ColumnInfoTypeName.TIMESTAMP;
             columnInfo.setTypeText(TIMESTAMP);
           }
+
+          // Check if we need to convert geospatial types to string when geospatial support is
+          // disabled
+          String typeText = columnInfo.getTypeText();
+          if (!ctx.isGeoSpatialSupportEnabled() && isGeospatialType(columnTypeName)) {
+            LOGGER.debug(
+                "Geospatial support is disabled, converting {} to STRING in metadata",
+                columnTypeName);
+            columnTypeName = ColumnInfoTypeName.STRING;
+            typeText = "STRING";
+          }
+
           int columnType = DatabricksTypeUtil.getColumnType(columnTypeName);
           int[] precisionAndScale = getPrecisionAndScale(columnInfo, columnType);
           int precision = precisionAndScale[0];
@@ -106,8 +118,7 @@ public class DatabricksResultSetMetaData implements ResultSetMetaData {
               .columnType(columnType)
               .columnTypeText(
                   metadataResultSetBuilder.stripTypeName(
-                      columnInfo
-                          .getTypeText())) // store base type eg. DECIMAL instead of DECIMAL(7,2)
+                      typeText)) // store base type eg. DECIMAL instead of DECIMAL(7,2)
               .typePrecision(precision)
               .typeScale(scale)
               .displaySize(DatabricksTypeUtil.getDisplaySize(columnTypeName, precision, scale))
@@ -670,6 +681,16 @@ public class DatabricksResultSetMetaData implements ResultSetMetaData {
         && arrowMetadata.size() > index
         && arrowMetadata.get(index) != null
         && arrowMetadata.get(index).contains(GEOGRAPHY);
+  }
+
+  /**
+   * Checks if the given column type is a geospatial type.
+   *
+   * @param type the column type to check
+   * @return true if the type is GEOMETRY or GEOGRAPHY, false otherwise
+   */
+  private boolean isGeospatialType(ColumnInfoTypeName type) {
+    return type == ColumnInfoTypeName.GEOMETRY || type == ColumnInfoTypeName.GEOGRAPHY;
   }
 
   private ImmutableDatabricksColumn.Builder getColumnBuilder() {
