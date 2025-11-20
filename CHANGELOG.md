@@ -9,6 +9,7 @@
   - Note: Large batches are chunked for execution. If a chunk fails, previous chunks remain committed (no transaction rollback). Consider using staging tables for critical workflows.
 - Added Feature-flag integration for SQL Exec API rollout
 - Call statements will return result sets in response
+- Add a gating flag for enabling GeoSpatial support: `EnableGeoSpatialSupport`. By default, it will be disabled
 
 ### Updated
 - Minimized OAuth requests by reducing calls in feature flags and telemetry.
@@ -19,6 +20,9 @@
 - Fixed: PreparedStatement.getMetaData() now correctly reports TINYINT columns as Types.TINYINT (java.lang.Byte) instead of Types.SMALLINT (java.lang.Integer).
 - Fixed: TINYINT to String conversion to return numeric representation (e.g., "65") instead of character representation (e.g., "A").
 - Fixed: Complex types (Structs, arrays, maps) now show detailed type information in metadata calls in Thrift mode
+- Fixed: incorrect chunk download/processing status codes.
+- Shade SLF4J to avoid conflicts with user applications.
+
 ---
 
 ## [v3.0.4] - 2025-11-12
