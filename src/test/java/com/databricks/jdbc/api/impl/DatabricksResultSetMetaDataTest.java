@@ -701,6 +701,74 @@ public class DatabricksResultSetMetaDataTest {
   }
 
   @Test
+  public void testJsonArrayWithComplexTypesEnabledButGeospatialDisabled() throws SQLException {
+    // This test validates the important scenario where EnableComplexDatatypeSupport=1
+    // but EnableGeoSpatialSupport=0 (disabled). This simulates real-world usage where
+    // users want complex types (ARRAY, MAP, STRUCT) but want geospatial data as strings.
+    //
+    // Expected behavior:
+    // - GEOMETRY/GEOGRAPHY column types should report as STRING in metadata
+    // - ARRAY/MAP column types should report correctly (not affected)
+
+    // Explicitly enable complex data type support (EnableComplexDatatypeSupport=1)
+    when(connectionContext.isComplexDatatypeSupportEnabled()).thenReturn(true);
+    // Disable geospatial support (EnableGeoSpatialSupport=0)
+    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+
+    ResultManifest resultManifest = new ResultManifest();
+    resultManifest.setTotalRowCount(2L);
+    resultManifest.setFormat(com.databricks.sdk.service.sql.Format.JSON_ARRAY);
+
+    ResultSchema schema = new ResultSchema();
+    schema.setColumnCount(5L);
+
+    ColumnInfo idColumn = getColumn("id", ColumnInfoTypeName.INT, "INT");
+    ColumnInfo geometryColumn = getColumn("location", ColumnInfoTypeName.GEOMETRY, "GEOMETRY");
+    ColumnInfo geographyColumn = getColumn("region", ColumnInfoTypeName.GEOGRAPHY, "GEOGRAPHY");
+    // Complex types that should work normally when complex support is enabled
+    ColumnInfo arrayColumn = getColumn("tags", ColumnInfoTypeName.ARRAY, "ARRAY<STRING>");
+    ColumnInfo mapColumn = getColumn("metadata", ColumnInfoTypeName.MAP, "MAP<STRING,STRING>");
+
+    schema.setColumns(List.of(idColumn, geometryColumn, geographyColumn, arrayColumn, mapColumn));
+    resultManifest.setSchema(schema);
+
+    DatabricksResultSetMetaData metaData =
+        new DatabricksResultSetMetaData(STATEMENT_ID, resultManifest, false, connectionContext);
+
+    // Verify regular column is not affected
+    assertEquals("id", metaData.getColumnName(1));
+    assertEquals("INT", metaData.getColumnTypeName(1));
+    assertEquals(Types.INTEGER, metaData.getColumnType(1));
+    assertEquals("java.lang.Integer", metaData.getColumnClassName(1));
+
+    // === Verify GEOSPATIAL columns return STRING type ===
+    // GEOMETRY column should report as STRING
+    assertEquals("location", metaData.getColumnName(2));
+    assertEquals("STRING", metaData.getColumnTypeName(2));
+    assertEquals(Types.VARCHAR, metaData.getColumnType(2));
+    assertEquals("java.lang.String", metaData.getColumnClassName(2));
+
+    // GEOGRAPHY column should report as STRING
+    assertEquals("region", metaData.getColumnName(3));
+    assertEquals("STRING", metaData.getColumnTypeName(3));
+    assertEquals(Types.VARCHAR, metaData.getColumnType(3));
+    assertEquals("java.lang.String", metaData.getColumnClassName(3));
+
+    // === Verify COMPLEX TYPE columns are NOT affected ===
+    // ARRAY column should report correctly (not converted to STRING)
+    assertEquals("tags", metaData.getColumnName(4));
+    assertEquals("ARRAY<STRING>", metaData.getColumnTypeName(4));
+    assertEquals(Types.ARRAY, metaData.getColumnType(4));
+    assertEquals("java.sql.Array", metaData.getColumnClassName(4));
+
+    // MAP column should report correctly (not converted to STRING)
+    assertEquals("metadata", metaData.getColumnName(5));
+    assertEquals("MAP<STRING,STRING>", metaData.getColumnTypeName(5));
+    assertEquals(Types.VARCHAR, metaData.getColumnType(5)); // MAP uses VARCHAR type
+    assertEquals("java.util.Map", metaData.getColumnClassName(5));
+  }
+
+  @Test
   public void testThriftGeometryColumnConvertedToStringWhenFlagDisabled() throws SQLException {
     // Mock connection context with geospatial support disabled
     when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);

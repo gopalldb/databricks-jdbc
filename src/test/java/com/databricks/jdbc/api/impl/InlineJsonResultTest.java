@@ -1,6 +1,7 @@
 package com.databricks.jdbc.api.impl;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.databricks.jdbc.api.internal.IDatabricksConnectionContext;
@@ -366,6 +367,95 @@ class InlineJsonResultTest {
     assertEquals("100", result.getObject(0).toString());
     assertEquals("POINT(1.5 2.5)", result.getObject(1).toString());
     assertEquals("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", result.getObject(2).toString());
+
+    assertFalse(result.next());
+  }
+
+  @Test
+  void testJsonArrayWithComplexTypesEnabledButGeospatialDisabled() throws DatabricksSQLException {
+    // This test validates the scenario where EnableComplexDatatypeSupport=1 but
+    // EnableGeoSpatialSupport=0 (disabled). This simulates a real-world scenario where
+    // users enable complex types for ARRAY/MAP/STRUCT but want geospatial data as strings.
+    //
+    // Expected behavior:
+    // - Geospatial column TYPES in metadata should report as STRING
+    // - Geospatial column DATA should return as plain string values
+    // - Complex types (ARRAY, MAP) should still work normally
+
+    List<ColumnInfo> columns = new ArrayList<>();
+    columns.add(createColumnInfo("id", ColumnInfoTypeName.INT, "INT"));
+    columns.add(createColumnInfo("location", ColumnInfoTypeName.GEOMETRY, "GEOMETRY"));
+    columns.add(createColumnInfo("region", ColumnInfoTypeName.GEOGRAPHY, "GEOGRAPHY"));
+    // Add complex types that should still work when complex support is enabled
+    columns.add(createColumnInfo("tags", ColumnInfoTypeName.ARRAY, "ARRAY<STRING>"));
+    columns.add(createColumnInfo("metadata", ColumnInfoTypeName.MAP, "MAP<STRING,STRING>"));
+
+    ResultManifest manifest = createManifestWithColumns(columns);
+    manifest.setFormat(Format.JSON_ARRAY);
+
+    // JSON array data with geospatial + complex types
+    Collection<Collection<String>> jsonArrayData =
+        Arrays.asList(
+            Arrays.asList(
+                "1",
+                "POINT(10.5 20.3)",
+                "POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))",
+                "[\"tag1\",\"tag2\"]",
+                "{\"key1\":\"value1\",\"key2\":\"value2\"}"));
+    when(resultData.getDataArray()).thenReturn(jsonArrayData);
+    when(resultData.getChunkIndex()).thenReturn(0L);
+
+    // Explicitly enable complex data type support (EnableComplexDatatypeSupport=1)
+    // Mark as lenient since InlineJsonResult doesn't directly check this flag,
+    // but we want to document the test scenario explicitly
+    lenient().when(connectionContext.isComplexDatatypeSupportEnabled()).thenReturn(true);
+    // Disable geospatial support (EnableGeoSpatialSupport=0)
+    when(connectionContext.isGeoSpatialSupportEnabled()).thenReturn(false);
+
+    // Create InlineJsonResult
+    InlineJsonResult result = new InlineJsonResult(manifest, resultData, STATEMENT_ID, session);
+
+    // Move to first row
+    assertTrue(result.next());
+
+    // === Test 1: Verify DATA values ===
+    Object idValue = result.getObject(0);
+    Object geometryValue = result.getObject(1);
+    Object geographyValue = result.getObject(2);
+    Object arrayValue = result.getObject(3);
+    Object mapValue = result.getObject(4);
+
+    assertNotNull(idValue);
+    assertNotNull(geometryValue);
+    assertNotNull(geographyValue);
+    assertNotNull(arrayValue);
+    assertNotNull(mapValue);
+
+    // Geospatial data should be plain strings when flag is disabled
+    assertEquals("1", idValue.toString());
+    assertEquals("POINT(10.5 20.3)", geometryValue.toString());
+    assertEquals("POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))", geographyValue.toString());
+
+    // Complex types are returned as JSON strings in JSON_ARRAY format
+    assertEquals("[\"tag1\",\"tag2\"]", arrayValue.toString());
+    assertEquals("{\"key1\":\"value1\",\"key2\":\"value2\"}", mapValue.toString());
+
+    // === Test 2: Verify COLUMN TYPES (metadata) ===
+    // Note: The ColumnInfo objects should have been converted to STRING by
+    // DatabricksResultSetMetaData when geospatial flag is disabled.
+    // Here we verify that the columns were passed correctly.
+
+    // In JSON format, we verify the column info types that would be used for metadata
+    ColumnInfo geometryColumn = columns.get(1);
+    ColumnInfo geographyColumn = columns.get(2);
+
+    // These column infos will be processed by DatabricksResultSetMetaData,
+    // which converts GEOMETRY/GEOGRAPHY to STRING when flag is disabled
+    assertEquals(ColumnInfoTypeName.GEOMETRY, geometryColumn.getTypeName());
+    assertEquals(ColumnInfoTypeName.GEOGRAPHY, geographyColumn.getTypeName());
+
+    // The actual conversion happens in DatabricksResultSetMetaData constructor,
+    // which is tested separately in DatabricksResultSetMetaDataTest
 
     assertFalse(result.next());
   }
