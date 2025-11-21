@@ -13,6 +13,7 @@
 
 ### Updated
 - Minimized OAuth requests by reducing calls in feature flags and telemetry.
+- Geospatial `getWKB()` now returns OGC-compliant WKB values.
 
 ### Fixed
 - Fix: SQLInterpolator failing to escape temporal fields and special characters.
