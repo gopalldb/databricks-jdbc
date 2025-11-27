@@ -24,7 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # If manual trigger: use input tag, else use workflow_run SHA
+          # If manual trigger: use input tag, else use the SHA from the completed workflow run
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.event.workflow_run.head_sha }}
           fetch-tags: true
           fetch-depth: 0
