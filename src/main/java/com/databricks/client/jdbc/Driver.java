@@ -51,32 +51,52 @@ public class Driver implements IDatabricksDriver {
 
   @Override
   public Connection connect(String url, Properties info) throws DatabricksSQLException {
-    if (!acceptsURL(url)) {
-      // Return null connection if URL is not accepted - as per JDBC standard.
-      return null;
-    }
-    IDatabricksConnectionContext connectionContext =
-        DatabricksConnectionContextFactory.create(url, info);
-    DriverUtil.setUpLogging(connectionContext);
-    CompletableFuture.runAsync(() -> LOGGER.info(getDriverSystemConfiguration().toString()));
-    UserAgentManager.setUserAgent(connectionContext);
-    DatabricksConnection connection = new DatabricksConnection(connectionContext);
-    boolean isConnectionOpen = false;
+    long connectionStartTime = System.currentTimeMillis();
     try {
-      connection.open();
-      isConnectionOpen = true;
-      DriverUtil.resolveMetadataClient(connection);
-      return connection;
-    } catch (Exception e) {
-      if (!isConnectionOpen) {
-        connection.close();
+      if (!acceptsURL(url)) {
+        // Return null connection if URL is not accepted - as per JDBC standard.
+        return null;
       }
-      String errorMessage =
-          String.format(
-              "Connection failure while using the OSS Databricks JDBC driver. Failed to connect to server: %s\n%s",
-              connectionContext.getHostUrl(), e);
-      LOGGER.error(e, errorMessage);
-      throw new DatabricksSQLException(errorMessage, e, DatabricksDriverErrorCode.CONNECTION_ERROR);
+      IDatabricksConnectionContext connectionContext =
+          DatabricksConnectionContextFactory.create(url, info);
+      DriverUtil.setUpLogging(connectionContext);
+      CompletableFuture.runAsync(() -> LOGGER.info(getDriverSystemConfiguration().toString()));
+      UserAgentManager.setUserAgent(connectionContext);
+      DatabricksConnection connection = new DatabricksConnection(connectionContext);
+      boolean isConnectionOpen = false;
+      try {
+        connection.open();
+        isConnectionOpen = true;
+        DriverUtil.resolveMetadataClient(connection);
+        return connection;
+      } catch (Exception e) {
+        if (!isConnectionOpen) {
+          connection.close();
+        }
+        String errorMessage =
+            String.format(
+                "Connection failure while using the OSS Databricks JDBC driver. Failed to connect to server: %s\n%s",
+                connectionContext.getHostUrl(), e);
+        LOGGER.error(e, errorMessage);
+        throw new DatabricksSQLException(
+            errorMessage, e, DatabricksDriverErrorCode.CONNECTION_ERROR);
+      }
+    } finally {
+      long connectionEndTime = System.currentTimeMillis();
+      // Record metrics if enabled (for testing concurrent connection performance)
+      try {
+        Class<?> metricsClass =
+            Class.forName("com.databricks.jdbc.metrics.ConnectionMetricsCollector");
+        Object instance = metricsClass.getMethod("getInstance").invoke(null);
+        boolean enabled = (Boolean) metricsClass.getMethod("isEnabled").invoke(instance);
+        if (enabled) {
+          metricsClass
+              .getMethod("recordConnectionCreation", long.class)
+              .invoke(instance, connectionEndTime - connectionStartTime);
+        }
+      } catch (Exception e) {
+        // Metrics collection is optional, ignore if class not available
+      }
     }
   }
 

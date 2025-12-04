@@ -71,16 +71,35 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
 
   @Override
   public ResultSet executeQuery(String sql) throws SQLException {
-    // TODO (PECO-1731): Can it fail fast without executing SQL query?
-    checkIfClosed();
-    ResultSet rs = executeInternal(sql, new HashMap<>(), StatementType.QUERY);
-    if (!shouldReturnResultSet(sql)) {
-      String errorMessage =
-          "A ResultSet was expected but not generated from query. However, query "
-              + "execution was successful.";
-      throw new DatabricksSQLException(errorMessage, DatabricksDriverErrorCode.RESULT_SET_ERROR);
+    long statementStartTime = System.currentTimeMillis();
+    try {
+      // TODO (PECO-1731): Can it fail fast without executing SQL query?
+      checkIfClosed();
+      ResultSet rs = executeInternal(sql, new HashMap<>(), StatementType.QUERY);
+      if (!shouldReturnResultSet(sql)) {
+        String errorMessage =
+            "A ResultSet was expected but not generated from query. However, query "
+                + "execution was successful.";
+        throw new DatabricksSQLException(errorMessage, DatabricksDriverErrorCode.RESULT_SET_ERROR);
+      }
+      return rs;
+    } finally {
+      long statementEndTime = System.currentTimeMillis();
+      // Record metrics if enabled (for testing concurrent connection performance)
+      try {
+        Class<?> metricsClass =
+            Class.forName("com.databricks.jdbc.metrics.ConnectionMetricsCollector");
+        Object instance = metricsClass.getMethod("getInstance").invoke(null);
+        boolean enabled = (Boolean) metricsClass.getMethod("isEnabled").invoke(instance);
+        if (enabled) {
+          metricsClass
+              .getMethod("recordStatementExecution", long.class)
+              .invoke(instance, statementEndTime - statementStartTime);
+        }
+      } catch (Exception e) {
+        // Metrics collection is optional, ignore if class not available
+      }
     }
-    return rs;
   }
 
   @Override
@@ -228,9 +247,28 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
 
   @Override
   public boolean execute(String sql) throws SQLException {
-    checkIfClosed();
-    resultSet = executeInternal(sql, new HashMap<>(), StatementType.SQL);
-    return shouldReturnResultSet(sql);
+    long statementStartTime = System.currentTimeMillis();
+    try {
+      checkIfClosed();
+      resultSet = executeInternal(sql, new HashMap<>(), StatementType.SQL);
+      return shouldReturnResultSet(sql);
+    } finally {
+      long statementEndTime = System.currentTimeMillis();
+      // Record metrics if enabled (for testing concurrent connection performance)
+      try {
+        Class<?> metricsClass =
+            Class.forName("com.databricks.jdbc.metrics.ConnectionMetricsCollector");
+        Object instance = metricsClass.getMethod("getInstance").invoke(null);
+        boolean enabled = (Boolean) metricsClass.getMethod("isEnabled").invoke(instance);
+        if (enabled) {
+          metricsClass
+              .getMethod("recordStatementExecution", long.class)
+              .invoke(instance, statementEndTime - statementStartTime);
+        }
+      } catch (Exception e) {
+        // Metrics collection is optional, ignore if class not available
+      }
+    }
   }
 
   @Override

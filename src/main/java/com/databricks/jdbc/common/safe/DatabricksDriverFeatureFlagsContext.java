@@ -107,7 +107,25 @@ public class DatabricksDriverFeatureFlagsContext {
   @VisibleForTesting
   void fetchAndSetFlagsFromServer(IDatabricksHttpClient httpClient, HttpGet request)
       throws DatabricksHttpException, IOException {
+    long startTime = System.currentTimeMillis();
     try (CloseableHttpResponse response = httpClient.execute(request)) {
+      long endTime = System.currentTimeMillis();
+
+      // Record metrics if enabled (for testing concurrent connection performance)
+      try {
+        Class<?> metricsClass =
+            Class.forName("com.databricks.jdbc.metrics.ConnectionMetricsCollector");
+        Object instance = metricsClass.getMethod("getInstance").invoke(null);
+        boolean enabled = (Boolean) metricsClass.getMethod("isEnabled").invoke(instance);
+        if (enabled) {
+          metricsClass
+              .getMethod("recordFeatureFlagsCall", long.class)
+              .invoke(instance, endTime - startTime);
+        }
+      } catch (Exception e) {
+        // Metrics collection is optional, ignore if class not available
+      }
+
       if (response.getStatusLine().getStatusCode() == 200) {
         String responseBody = EntityUtils.toString(response.getEntity());
         FeatureFlagsResponse featureFlagsResponse =
