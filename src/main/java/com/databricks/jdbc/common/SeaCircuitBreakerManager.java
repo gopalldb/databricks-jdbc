@@ -67,9 +67,9 @@ public class SeaCircuitBreakerManager {
     long elapsed = System.currentTimeMillis() - lastFailure;
     boolean isOpen = elapsed < CIRCUIT_BREAK_DURATION_MS;
 
-    if (!isOpen && lastFailure != -1) {
+    if (!isOpen) {
       // Circuit just closed - log it once
-      LOGGER.info("SEA circuit breaker CLOSED after 24 hours. Will check feature flag again.");
+      LOGGER.trace("SEA circuit breaker CLOSED after 24 hours. Will check feature flag again.");
     }
 
     return isOpen;
