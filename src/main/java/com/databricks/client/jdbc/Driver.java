@@ -7,6 +7,7 @@ import com.databricks.jdbc.api.impl.DatabricksConnectionContextFactory;
 import com.databricks.jdbc.api.internal.IDatabricksConnectionContext;
 import com.databricks.jdbc.common.DatabricksClientType;
 import com.databricks.jdbc.common.util.*;
+import com.databricks.jdbc.common.util.SecurityUtil;
 import com.databricks.jdbc.dbclient.IDatabricksClient;
 import com.databricks.jdbc.dbclient.impl.common.SessionId;
 import com.databricks.jdbc.dbclient.impl.sqlexec.DatabricksSdkClient;
@@ -119,7 +120,9 @@ public class Driver implements IDatabricksDriver {
       throws SQLException {
     if (!acceptsURL(url)) {
       throw new DatabricksSQLException(
-          String.format("Invalid connection Url {%s}, Can't close connection.", url),
+          String.format(
+              "Invalid connection Url {%s}, Can't close connection.",
+              SecurityUtil.sanitizeJdbcUrl(url)),
           DatabricksDriverErrorCode.CONNECTION_ERROR);
     }
     IDatabricksConnectionContext connectionContext =

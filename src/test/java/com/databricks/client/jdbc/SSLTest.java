@@ -2,6 +2,7 @@ package com.databricks.client.jdbc;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.databricks.jdbc.common.util.SecurityUtil;
 import java.io.File;
 import java.security.KeyStore;
 import java.sql.Connection;
@@ -121,7 +122,7 @@ public class SSLTest {
   }
 
   private void verifyConnect(String jdbcUrl) throws Exception {
-    LOGGER.info("Attempting to connect with URL: " + jdbcUrl);
+    LOGGER.info("Attempting to connect with URL: " + SecurityUtil.sanitizeJdbcUrl(jdbcUrl));
 
     try (Connection conn = DriverManager.getConnection(jdbcUrl, "token", patToken)) {
       Statement stmt = conn.createStatement();
@@ -194,7 +195,7 @@ public class SSLTest {
 
         try {
           LOGGER.info("\n\n==== TEST 1: Connection with empty trust store ====");
-          LOGGER.info("URL: " + url1);
+          LOGGER.info("URL: " + SecurityUtil.sanitizeJdbcUrl(url1));
           LOGGER.info("Trust store: " + System.getProperty("javax.net.ssl.trustStore"));
           verifyConnect(url1);
           fail("Connection with empty trust store should have failed");
@@ -210,7 +211,7 @@ public class SSLTest {
 
         try {
           LOGGER.info("\n\n==== TEST 2: Connection with non-existent trust store ====");
-          LOGGER.info("URL: " + url2);
+          LOGGER.info("URL: " + SecurityUtil.sanitizeJdbcUrl(url2));
           LOGGER.info("Trust store: " + nonExistentPath);
           verifyConnect(url2);
           fail("Connection with non-existent trust store should have failed");
@@ -235,7 +236,7 @@ public class SSLTest {
 
         try {
           LOGGER.info("\n\n==== TEST 3: Connection with AllowSelfSignedCerts=1 ====");
-          LOGGER.info("URL: " + url3);
+          LOGGER.info("URL: " + SecurityUtil.sanitizeJdbcUrl(url3));
           LOGGER.info("Trust store: " + System.getProperty("javax.net.ssl.trustStore"));
           verifyConnect(url3);
           LOGGER.info("Connection succeeded with AllowSelfSignedCerts=1 as expected");
@@ -568,7 +569,7 @@ public class SSLTest {
       try {
         LOGGER.info(
             "\n==== Testing connection with UseSystemTrustStore=0 and no custom trust store ====");
-        LOGGER.info("URL: " + url);
+        LOGGER.info("URL: " + SecurityUtil.sanitizeJdbcUrl(url));
         verifyConnect(url);
         LOGGER.info("Connection succeeded using default trust store with UseSystemTrustStore=0");
       } catch (Exception e) {
@@ -614,7 +615,7 @@ public class SSLTest {
 
         try {
           LOGGER.info("\n==== Testing custom trust store precedence ====");
-          LOGGER.info("URL: " + url);
+          LOGGER.info("URL: " + SecurityUtil.sanitizeJdbcUrl(url));
           LOGGER.info(
               "System property trust store: " + System.getProperty("javax.net.ssl.trustStore"));
           LOGGER.info("Custom trust store: " + trustStorePath);

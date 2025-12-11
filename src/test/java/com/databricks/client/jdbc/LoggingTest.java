@@ -1,5 +1,6 @@
 package com.databricks.client.jdbc;
 
+import com.databricks.jdbc.common.util.SecurityUtil;
 import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -82,7 +83,7 @@ public class LoggingTest {
             + ";usethriftclient="
             + useThriftClient;
 
-    logger.info("Connecting with URL: " + jdbcUrl);
+    logger.info("Connecting with URL: " + SecurityUtil.sanitizeJdbcUrl(jdbcUrl));
 
     return jdbcUrl;
   }

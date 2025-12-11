@@ -12,6 +12,7 @@ import static com.databricks.jdbc.common.util.WildcardUtil.isNullOrEmpty;
 import com.databricks.jdbc.api.internal.IDatabricksConnectionContext;
 import com.databricks.jdbc.common.*;
 import com.databricks.jdbc.common.safe.DatabricksDriverFeatureFlagsContextFactory;
+import com.databricks.jdbc.common.util.SecurityUtil;
 import com.databricks.jdbc.common.util.ValidationUtil;
 import com.databricks.jdbc.exception.DatabricksDriverException;
 import com.databricks.jdbc.exception.DatabricksParsingException;
@@ -149,7 +150,8 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
       throws DatabricksSQLException {
     if (!ValidationUtil.isValidJdbcUrl(url)) {
       throw new DatabricksParsingException(
-          "Invalid url " + url, DatabricksDriverErrorCode.CONNECTION_ERROR);
+          "Invalid url " + SecurityUtil.sanitizeJdbcUrl(url),
+          DatabricksDriverErrorCode.CONNECTION_ERROR);
     }
     Matcher urlMatcher = JDBC_URL_PATTERN.matcher(url);
     if (urlMatcher.find()) {
