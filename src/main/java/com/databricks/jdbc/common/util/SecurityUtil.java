@@ -27,7 +27,6 @@ public class SecurityUtil {
    *   <li>SSL_TRUST_STORE_PASSWORD, SSLTRUSTTOREPWD - SSL trust store passwords
    *   <li>SSL_KEY_STORE_PASSWORD, SSLKEYSTOREPWD - SSL key store passwords
    *   <li>TOKEN_CACHE_PASS_PHRASE, TOKENCACHEPASSPHRASE - Token cache passphrases
-   *   <li>UID - User identifier
    * </ul>
    *
    * <p>Pattern matches: - Parameter name (case-insensitive) - Equals sign - Value (everything until
@@ -45,7 +44,6 @@ public class SecurityUtil {
               + "|SSL_?TRUST_?STORE_?PASSWORD|SSL_?TRUST_?STORE_?PWD"
               + "|SSL_?KEY_?STORE_?PASSWORD|SSL_?KEY_?STORE_?PWD"
               + "|TOKEN_?CACHE_?PASS_?PHRASE"
-              + "|UID"
               + ")=[^;&]*",
           Pattern.CASE_INSENSITIVE);
 
@@ -105,7 +103,6 @@ public class SecurityUtil {
         || upperName.contains("TOKEN")
         || upperName.contains("SECRET")
         || upperName.contains("PASSPHRASE")
-        || upperName.equals("UID")
         || upperName.contains("PROXYUSER")
         || upperName.contains("PROXYUID");
   }

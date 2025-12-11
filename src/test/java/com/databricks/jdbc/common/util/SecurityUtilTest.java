@@ -27,11 +27,9 @@ public class SecurityUtilTest {
     String sanitized = SecurityUtil.sanitizeJdbcUrl(url);
 
     assertNotNull(sanitized);
-    assertFalse(
-        sanitized.contains("user@example.com"), "Sanitized URL should not contain the user ID");
-    assertTrue(
-        sanitized.contains("UID=***REDACTED***"),
-        "Sanitized URL should contain redacted UID placeholder");
+    // UID is not redacted (similar to CLIENT_ID, it's an identifier not a secret)
+    assertTrue(sanitized.contains("user@example.com"), "UID should be preserved in sanitized URL");
+    assertTrue(sanitized.contains("UID=user@example.com"), "UID parameter should be visible");
   }
 
   @Test
@@ -174,13 +172,13 @@ public class SecurityUtilTest {
 
     assertNotNull(sanitized);
     assertFalse(sanitized.contains("secret123"), "Sanitized URL should not contain the password");
-    assertFalse(sanitized.contains("user@example.com"), "Sanitized URL should not contain the UID");
+    assertTrue(
+        sanitized.contains("user@example.com"), "UID should be preserved (it's an identifier)");
     assertFalse(
         sanitized.contains("clientsecret"), "Sanitized URL should not contain the client secret");
     assertTrue(
         sanitized.contains("PWD=***REDACTED***"), "Sanitized URL should contain redacted password");
-    assertTrue(
-        sanitized.contains("UID=***REDACTED***"), "Sanitized URL should contain redacted UID");
+    assertTrue(sanitized.contains("UID=user@example.com"), "UID should be visible");
     assertTrue(
         sanitized.contains("OAuth2Secret=***REDACTED***"),
         "Sanitized URL should contain redacted client secret");
@@ -251,7 +249,6 @@ public class SecurityUtilTest {
     assertTrue(SecurityUtil.isCredentialParameter("TOKEN"));
     assertTrue(SecurityUtil.isCredentialParameter("SECRET"));
     assertTrue(SecurityUtil.isCredentialParameter("PASSPHRASE"));
-    assertTrue(SecurityUtil.isCredentialParameter("UID"));
     assertTrue(SecurityUtil.isCredentialParameter("ProxyUser"));
     assertTrue(SecurityUtil.isCredentialParameter("ProxyUID"));
 
@@ -260,6 +257,7 @@ public class SecurityUtilTest {
     assertFalse(SecurityUtil.isCredentialParameter("LogLevel"));
     assertFalse(SecurityUtil.isCredentialParameter("EnableArrow"));
     assertFalse(SecurityUtil.isCredentialParameter("HOST"));
+    assertFalse(SecurityUtil.isCredentialParameter("UID")); // UID is an identifier, not a secret
     assertFalse(SecurityUtil.isCredentialParameter(null));
   }
 
@@ -271,7 +269,8 @@ public class SecurityUtilTest {
 
     assertNotNull(sanitized);
     assertFalse(sanitized.contains("secret123"), "Sanitized URL should not contain the password");
-    assertFalse(sanitized.contains("user"), "Sanitized URL should not contain the user");
+    assertTrue(
+        sanitized.contains("UID=user"), "UID should be preserved (it's an identifier, not secret)");
   }
 
   @Test
@@ -297,8 +296,8 @@ public class SecurityUtilTest {
     assertTrue(sanitized.contains("AuthMech=3"));
     assertTrue(sanitized.contains("HttpPath=/sql/1.0"));
     assertTrue(sanitized.contains("LogLevel=DEBUG"));
+    assertTrue(sanitized.contains("UID=user"), "UID should be preserved (identifier, not secret)");
     // But credentials are redacted
     assertFalse(sanitized.contains("secret"));
-    assertFalse(sanitized.contains("user"), "user in UID value should be redacted");
   }
 }
