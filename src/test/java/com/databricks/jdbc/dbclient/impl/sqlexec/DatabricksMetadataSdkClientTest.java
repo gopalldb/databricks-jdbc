@@ -20,7 +20,6 @@ import com.databricks.jdbc.common.StatementType;
 import com.databricks.jdbc.dbclient.impl.common.CrossReferenceKeysDatabricksResultSetAdapter;
 import com.databricks.jdbc.dbclient.impl.common.ImportedKeysDatabricksResultSetAdapter;
 import com.databricks.jdbc.exception.DatabricksSQLException;
-import com.databricks.jdbc.exception.DatabricksValidationException;
 import com.databricks.jdbc.model.core.ResultColumn;
 import com.databricks.sdk.service.sql.StatementState;
 import java.sql.ResultSet;
@@ -788,20 +787,34 @@ public class DatabricksMetadataSdkClientTest {
   }
 
   @Test
-  void testThrowsErrorResultInCaseOfNullCatalog() {
+  void testReturnsEmptyResultSetInCaseOfNullCatalog() throws SQLException {
     IDatabricksConnectionContext mockContext = mock(IDatabricksConnectionContext.class);
     when(mockContext.getEnableMultipleCatalogSupport()).thenReturn(true);
     when(mockClient.getConnectionContext()).thenReturn(mockContext);
     DatabricksMetadataSdkClient metadataClient = new DatabricksMetadataSdkClient(mockClient);
-    assertThrows(
-        DatabricksValidationException.class,
-        () -> metadataClient.listColumns(session, null, TEST_SCHEMA, TEST_TABLE, TEST_COLUMN));
-    assertThrows(
-        DatabricksValidationException.class,
-        () -> metadataClient.listPrimaryKeys(session, null, TEST_SCHEMA, TEST_TABLE));
-    assertThrows(
-        DatabricksValidationException.class,
-        () -> metadataClient.listFunctions(session, null, TEST_SCHEMA, TEST_TABLE));
+
+    // listFunctions with null catalog should return empty ResultSet
+    DatabricksResultSet functionsResult =
+        metadataClient.listFunctions(session, null, TEST_SCHEMA, TEST_TABLE);
+    assertNotNull(functionsResult);
+    assertFalse(
+        functionsResult.next(), "Expected empty result set for listFunctions with null catalog");
+
+    // listPrimaryKeys with null catalog should return empty ResultSet
+    DatabricksResultSet primaryKeysResult =
+        metadataClient.listPrimaryKeys(session, null, TEST_SCHEMA, TEST_TABLE);
+    assertNotNull(primaryKeysResult);
+    assertFalse(
+        primaryKeysResult.next(),
+        "Expected empty result set for listPrimaryKeys with null catalog");
+
+    // listImportedKeys with null catalog should return empty ResultSet
+    DatabricksResultSet importedKeysResult =
+        metadataClient.listImportedKeys(session, null, TEST_SCHEMA, TEST_TABLE);
+    assertNotNull(importedKeysResult);
+    assertFalse(
+        importedKeysResult.next(),
+        "Expected empty result set for listImportedKeys with null catalog");
   }
 
   @Test
@@ -943,5 +956,147 @@ public class DatabricksMetadataSdkClientTest {
     assertEquals(StatementState.SUCCEEDED, actualResult.getStatementStatus().getState());
     assertEquals(METADATA_STATEMENT_ID, actualResult.getStatementId());
     assertEquals(2, ((DatabricksResultSetMetaData) actualResult.getMetaData()).getTotalRows());
+  }
+
+  /**
+   * Test that listTables handles SQLException with null SQL state without NPE. This tests the fix
+   * for the issue where e.getSQLState() could return null, causing NullPointerException when
+   * calling .equals() on it.
+   */
+  @Test
+  void testListTables_handlesNullSqlStateWithoutNPE() throws Exception {
+    // Create exception with null SQL state (simulating server response without structured SQL
+    // state)
+    DatabricksSQLException exception =
+        new DatabricksSQLException(
+            "[SCHEMA_NOT_FOUND] The schema cannot be found. SQLSTATE: 42704",
+            (String) null); // null SQL state
+
+    when(session.getComputeResource()).thenReturn(WAREHOUSE_COMPUTE);
+    IDatabricksConnectionContext mockContext = mock(IDatabricksConnectionContext.class);
+    when(mockContext.getEnableMultipleCatalogSupport()).thenReturn(true);
+    when(mockClient.getConnectionContext()).thenReturn(mockContext);
+
+    DatabricksMetadataSdkClient metadataClient = new DatabricksMetadataSdkClient(mockClient);
+    when(mockClient.executeStatement(
+            "SHOW TABLES IN CATALOG ",
+            WAREHOUSE_COMPUTE,
+            new HashMap<>(),
+            StatementType.METADATA,
+            session,
+            null))
+        .thenThrow(exception);
+
+    // This should throw the original exception, not NPE
+    assertThrows(
+        DatabricksSQLException.class,
+        () -> metadataClient.listTables(session, "", null, null, null));
+  }
+
+  @Test
+  void testListSchemas_handlesNullSqlStateWithoutNPE() throws Exception {
+    DatabricksSQLException exception =
+        new DatabricksSQLException(
+            "syntax error at or near \"ALL CATALOGS\"", (String) null); // null SQL state
+
+    when(session.getComputeResource()).thenReturn(WAREHOUSE_COMPUTE);
+    IDatabricksConnectionContext mockContext = mock(IDatabricksConnectionContext.class);
+    when(mockContext.getEnableMultipleCatalogSupport()).thenReturn(true);
+    when(mockClient.getConnectionContext()).thenReturn(mockContext);
+
+    DatabricksMetadataSdkClient metadataClient = new DatabricksMetadataSdkClient(mockClient);
+    when(mockClient.executeStatement(
+            "SHOW SCHEMAS IN ALL CATALOGS",
+            WAREHOUSE_COMPUTE,
+            new HashMap<>(),
+            StatementType.METADATA,
+            session,
+            null))
+        .thenThrow(exception);
+
+    // This should throw the original exception, not NPE
+    assertThrows(
+        DatabricksSQLException.class, () -> metadataClient.listSchemas(session, null, null));
+  }
+
+  @Test
+  void testListImportedKeys_handlesNullSqlStateWithoutNPE() throws Exception {
+    DatabricksSQLException exception =
+        new DatabricksSQLException(
+            "syntax error at or near \"foreign\"", (String) null); // null SQL state
+
+    when(session.getComputeResource()).thenReturn(WAREHOUSE_COMPUTE);
+    IDatabricksConnectionContext mockContext = mock(IDatabricksConnectionContext.class);
+    when(mockContext.getEnableMultipleCatalogSupport()).thenReturn(true);
+    when(mockClient.getConnectionContext()).thenReturn(mockContext);
+
+    DatabricksMetadataSdkClient metadataClient = new DatabricksMetadataSdkClient(mockClient);
+    when(mockClient.executeStatement(
+            "SHOW FOREIGN KEYS IN CATALOG catalog1 IN SCHEMA testSchema IN TABLE testTable",
+            WAREHOUSE_COMPUTE,
+            new HashMap<>(),
+            StatementType.METADATA,
+            session,
+            null))
+        .thenThrow(exception);
+
+    // This should throw the original exception, not NPE
+    assertThrows(
+        DatabricksSQLException.class,
+        () -> metadataClient.listImportedKeys(session, TEST_CATALOG, TEST_SCHEMA, TEST_TABLE));
+  }
+
+  @Test
+  void testListCrossReferences_handlesNullSqlStateWithoutNPE() throws Exception {
+    DatabricksSQLException exception =
+        new DatabricksSQLException(
+            "syntax error at or near \"foreign\"", (String) null); // null SQL state
+
+    when(session.getComputeResource()).thenReturn(WAREHOUSE_COMPUTE);
+    when(mockClient.getConnectionContext()).thenReturn(mock(IDatabricksConnectionContext.class));
+
+    DatabricksMetadataSdkClient metadataClient = new DatabricksMetadataSdkClient(mockClient);
+    when(mockClient.executeStatement(
+            "SHOW FOREIGN KEYS IN CATALOG catalog1 IN SCHEMA testSchema IN TABLE testTable",
+            WAREHOUSE_COMPUTE,
+            new HashMap<>(),
+            StatementType.METADATA,
+            session,
+            null))
+        .thenThrow(exception);
+
+    // This should throw the original exception, not NPE
+    assertThrows(
+        DatabricksSQLException.class,
+        () ->
+            metadataClient.listCrossReferences(
+                session,
+                "parentCatalog",
+                "parentSchema",
+                "parentTable",
+                TEST_CATALOG,
+                TEST_SCHEMA,
+                TEST_TABLE));
+  }
+
+  @Test
+  void testListSchemasWithEmptyCatalog() throws SQLException {
+    IDatabricksConnectionContext mockContext = mock(IDatabricksConnectionContext.class);
+    when(mockContext.getEnableMultipleCatalogSupport()).thenReturn(false);
+    when(session.getCurrentCatalog()).thenReturn("");
+    when(mockClient.getConnectionContext()).thenReturn(mockContext);
+
+    DatabricksMetadataSdkClient metadataClient = new DatabricksMetadataSdkClient(mockClient);
+
+    // Call listSchemas with empty catalog
+    DatabricksResultSet actualResult = metadataClient.listSchemas(session, "", null);
+
+    // Verify the result set is empty
+    assertNotNull(actualResult);
+    assertEquals(StatementState.SUCCEEDED, actualResult.getStatementStatus().getState());
+    assertEquals(METADATA_STATEMENT_ID, actualResult.getStatementId());
+    assertEquals(0, ((DatabricksResultSetMetaData) actualResult.getMetaData()).getTotalRows());
+    assertFalse(
+        actualResult.next(), "Expected empty result set for listSchemas with empty catalog");
   }
 }
