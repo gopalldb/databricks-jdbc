@@ -14,36 +14,38 @@ public class SecurityUtil {
   /**
    * Pattern to match credential parameters in JDBC URLs.
    *
-   * <p>Matches all parameter names from DatabricksJdbcUrlParams that contain sensitive data:
+   * <p>Matches exact parameter names from DatabricksJdbcUrlParams that contain sensitive data:
    *
    * <ul>
-   *   <li>PASSWORD, PWD - Authentication passwords
-   *   <li>CLIENT_SECRET, OAUTH2SECRET - OAuth2 client secrets
-   *   <li>AUTH_ACCESS_TOKEN, AUTH_REFRESHTOKEN - OAuth2 tokens
-   *   <li>OAUTHREFRESHTOKEN - OAuth2 refresh tokens
-   *   <li>PROXY_PWD, PROXYPWD, CFPROXYPWD - Proxy passwords
-   *   <li>PROXY_USER, PROXYUID, CFPROXYUID - Proxy usernames
-   *   <li>JWT_PASS_PHRASE, AUTH_JWT_KEY_PASSPHRASE - JWT passphrases
-   *   <li>SSL_TRUST_STORE_PASSWORD, SSLTRUSTTOREPWD - SSL trust store passwords
-   *   <li>SSL_KEY_STORE_PASSWORD, SSLKEYSTOREPWD - SSL key store passwords
-   *   <li>TOKEN_CACHE_PASS_PHRASE, TOKENCACHEPASSPHRASE - Token cache passphrases
+   *   <li>password, pwd - Authentication passwords
+   *   <li>OAuth2Secret - OAuth2 client secret
+   *   <li>Auth_AccessToken - OAuth2 access token
+   *   <li>Auth_RefreshToken, OAuthRefreshToken - OAuth2 refresh tokens
+   *   <li>proxyuid, cfproxyuid - Proxy usernames (usernames are sensitive in proxy context)
+   *   <li>proxypwd, cfproxypwd - Proxy passwords
+   *   <li>Auth_JWT_Key_Passphrase - JWT key passphrase
+   *   <li>SSLTrustStorePwd - SSL trust store password
+   *   <li>SSLKeyStorePwd - SSL key store password
+   *   <li>TokenCachePassPhrase - Token cache passphrase
    * </ul>
+   *
+   * <p>Note: UID is not redacted as it's an identifier (e.g., email, username), not a secret like a
+   * password or token.
    *
    * <p>Pattern matches: - Parameter name (case-insensitive) - Equals sign - Value (everything until
    * semicolon, ampersand, or end of string)
    */
   private static final Pattern CREDENTIAL_PATTERN =
       Pattern.compile(
-          "(PASSWORD|PWD"
-              + "|CLIENT_?SECRET|OAUTH2SECRET"
-              + "|AUTH_?ACCESS_?TOKEN"
-              + "|AUTH_?REFRESH_?TOKEN|OAUTH_?REFRESH_?TOKEN"
-              + "|PROXY_?PWD|CF_?PROXY_?PWD"
-              + "|PROXY_?USER|PROXY_?UID|CF_?PROXY_?UID"
-              + "|JWT_?PASS_?PHRASE|AUTH_?JWT_?KEY_?PASSPHRASE"
-              + "|SSL_?TRUST_?STORE_?PASSWORD|SSL_?TRUST_?STORE_?PWD"
-              + "|SSL_?KEY_?STORE_?PASSWORD|SSL_?KEY_?STORE_?PWD"
-              + "|TOKEN_?CACHE_?PASS_?PHRASE"
+          "(password|pwd"
+              + "|OAuth2Secret"
+              + "|Auth_AccessToken"
+              + "|Auth_RefreshToken|OAuthRefreshToken"
+              + "|proxyuid|proxypwd"
+              + "|cfproxyuid|cfproxypwd"
+              + "|Auth_JWT_Key_Passphrase"
+              + "|SSLTrustStorePwd|SSLKeyStorePwd"
+              + "|TokenCachePassPhrase"
               + ")=[^;&]*",
           Pattern.CASE_INSENSITIVE);
 
@@ -82,29 +84,6 @@ public class SecurityUtil {
    */
   public static String sanitizeConnectionString(String connectionString) {
     return sanitizeJdbcUrl(connectionString);
-  }
-
-  /**
-   * Checks if a parameter name represents a credential or sensitive value.
-   *
-   * <p>This method can be used to determine whether a parameter should be redacted before logging.
-   *
-   * @param parameterName the parameter name to check, case-insensitive
-   * @return true if the parameter represents a credential, false otherwise
-   */
-  public static boolean isCredentialParameter(String parameterName) {
-    if (parameterName == null) {
-      return false;
-    }
-    String upperName = parameterName.toUpperCase().replaceAll("[_\\s-]", "");
-    return upperName.contains("PASSWORD")
-        || upperName.contains("PWD")
-        || upperName.equals("PWD")
-        || upperName.contains("TOKEN")
-        || upperName.contains("SECRET")
-        || upperName.contains("PASSPHRASE")
-        || upperName.contains("PROXYUSER")
-        || upperName.contains("PROXYUID");
   }
 
   private SecurityUtil() {

@@ -236,32 +236,6 @@ public class SecurityUtilTest {
   }
 
   @Test
-  void testIsCredentialParameter() {
-    // Test positive cases
-    assertTrue(SecurityUtil.isCredentialParameter("PASSWORD"));
-    assertTrue(SecurityUtil.isCredentialParameter("PWD"));
-    assertTrue(SecurityUtil.isCredentialParameter("pwd"));
-    assertTrue(SecurityUtil.isCredentialParameter("OAuth2Secret"));
-    assertTrue(SecurityUtil.isCredentialParameter("AUTH_ACCESS_TOKEN"));
-    assertTrue(SecurityUtil.isCredentialParameter("Auth_RefreshToken"));
-    assertTrue(SecurityUtil.isCredentialParameter("JWT_PASS_PHRASE"));
-    assertTrue(SecurityUtil.isCredentialParameter("SSLTrustStorePwd"));
-    assertTrue(SecurityUtil.isCredentialParameter("TOKEN"));
-    assertTrue(SecurityUtil.isCredentialParameter("SECRET"));
-    assertTrue(SecurityUtil.isCredentialParameter("PASSPHRASE"));
-    assertTrue(SecurityUtil.isCredentialParameter("ProxyUser"));
-    assertTrue(SecurityUtil.isCredentialParameter("ProxyUID"));
-
-    // Test negative cases
-    assertFalse(SecurityUtil.isCredentialParameter("HttpPath"));
-    assertFalse(SecurityUtil.isCredentialParameter("LogLevel"));
-    assertFalse(SecurityUtil.isCredentialParameter("EnableArrow"));
-    assertFalse(SecurityUtil.isCredentialParameter("HOST"));
-    assertFalse(SecurityUtil.isCredentialParameter("UID")); // UID is an identifier, not a secret
-    assertFalse(SecurityUtil.isCredentialParameter(null));
-  }
-
-  @Test
   void testSanitizeJdbcUrl_withAmpersandSeparator() {
     // Some JDBC URLs might use & as separator instead of ;
     String url = "jdbc:databricks://host:443/default?PWD=secret123&HttpPath=/sql/1.0&UID=user";
