@@ -18,6 +18,25 @@ public class UserAgentManager {
   private static final String VERSION_FILLER = "version";
 
   /**
+   * Parse custom user agent string into name and version components.
+   *
+   * @param customerUserAgent The custom user agent string (may be URL encoded)
+   * @return String array [name, version] or null if parsing fails
+   */
+  private static String[] parseCustomerUserAgent(String customerUserAgent) {
+    try {
+      String decodedUA = URLDecoder.decode(customerUserAgent, StandardCharsets.UTF_8);
+      int i = decodedUA.indexOf('/');
+      String customerName = (i < 0) ? decodedUA : decodedUA.substring(0, i);
+      String customerVersion = (i < 0) ? VERSION_FILLER : decodedUA.substring(i + 1);
+      return new String[] {customerName, customerVersion};
+    } catch (Exception e) {
+      LOGGER.debug("Failed to parse customer userAgent entry {}, Error {}", customerUserAgent, e);
+      return null;
+    }
+  }
+
+  /**
    * Set the user agent for the Databricks JDBC driver.
    *
    * @param connectionContext The connection context.
@@ -31,20 +50,16 @@ public class UserAgentManager {
 
     // Set custom user agent (maintains proper order: base -> client type -> custom)
     if (connectionContext.getCustomerUserAgent() != null) {
-      try {
-        String decodedUA =
-            URLDecoder.decode(
-                connectionContext.getCustomerUserAgent(),
-                StandardCharsets.UTF_8); // This is for encoded userAgentString
-        int i = decodedUA.indexOf('/');
-        String customerName = (i < 0) ? decodedUA : decodedUA.substring(0, i);
-        String customerVersion = (i < 0) ? VERSION_FILLER : decodedUA.substring(i + 1);
-        UserAgent.withOtherInfo(customerName, UserAgent.sanitize(customerVersion));
-      } catch (Exception e) {
-        LOGGER.debug(
-            "Failed to set user agent for customer userAgent entry {}, Error {}",
-            connectionContext.getCustomerUserAgent(),
-            e);
+      String[] parsed = parseCustomerUserAgent(connectionContext.getCustomerUserAgent());
+      if (parsed != null) {
+        try {
+          UserAgent.withOtherInfo(parsed[0], UserAgent.sanitize(parsed[1]));
+        } catch (Exception e) {
+          LOGGER.debug(
+              "Failed to set user agent for customer userAgent entry {}, Error {}",
+              connectionContext.getCustomerUserAgent(),
+              e);
+        }
       }
     }
   }
@@ -78,22 +93,16 @@ public class UserAgentManager {
 
     // Custom user agent (if provided)
     if (connectionContext.getCustomerUserAgent() != null) {
-      try {
-        String decodedUA =
-            URLDecoder.decode(connectionContext.getCustomerUserAgent(), StandardCharsets.UTF_8);
-        int i = decodedUA.indexOf('/');
-        String customerName = (i < 0) ? decodedUA : decodedUA.substring(0, i);
-        String customerVersion = (i < 0) ? VERSION_FILLER : decodedUA.substring(i + 1);
-        userAgent
-            .append(" ")
-            .append(customerName)
-            .append("/")
-            .append(UserAgent.sanitize(customerVersion));
-      } catch (Exception e) {
-        LOGGER.debug(
-            "Failed to include customer userAgent entry {} in connector service UA, Error {}",
-            connectionContext.getCustomerUserAgent(),
-            e);
+      String[] parsed = parseCustomerUserAgent(connectionContext.getCustomerUserAgent());
+      if (parsed != null) {
+        try {
+          userAgent.append(" ").append(parsed[0]).append("/").append(UserAgent.sanitize(parsed[1]));
+        } catch (Exception e) {
+          LOGGER.debug(
+              "Failed to include customer userAgent entry {} in connector service UA, Error {}",
+              connectionContext.getCustomerUserAgent(),
+              e);
+        }
       }
     }
 
