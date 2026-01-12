@@ -94,8 +94,7 @@ public class DatabricksDriverFeatureFlagsContext {
 
       // Set custom User-Agent for connector service (includes custom user agent without client
       // type)
-      String userAgent = UserAgentManager.buildUserAgentForConnectorService(
-              connectionContext);
+      String userAgent = UserAgentManager.buildUserAgentForConnectorService(connectionContext);
       request.setHeader("User-Agent", userAgent);
 
       DatabricksClientConfiguratorManager.getInstance()
