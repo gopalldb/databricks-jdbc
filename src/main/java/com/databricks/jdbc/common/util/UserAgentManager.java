@@ -54,7 +54,7 @@ public class UserAgentManager {
       if (parsed != null) {
         try {
           UserAgent.withOtherInfo(parsed[0], UserAgent.sanitize(parsed[1]));
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
           LOGGER.debug(
               "Failed to set user agent for customer userAgent entry {}, Error {}",
               connectionContext.getCustomerUserAgent(),
@@ -97,7 +97,7 @@ public class UserAgentManager {
       if (parsed != null) {
         try {
           userAgent.append(" ").append(parsed[0]).append("/").append(UserAgent.sanitize(parsed[1]));
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
           LOGGER.debug(
               "Failed to include customer userAgent entry {} in connector service UA, Error {}",
               connectionContext.getCustomerUserAgent(),
