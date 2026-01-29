@@ -1127,13 +1127,6 @@ public class DatabricksStatementTest {
   }
 
   @Test
-  public void testShouldReturnResultSet_WithNonRowcountQueryPrefixes_NullList() {
-    List<String> prefixes = null;
-    String query = "INSERT INTO table VALUES (1, 2, 3)";
-    assertFalse(DatabricksStatement.shouldReturnResultSet(query, prefixes));
-  }
-
-  @Test
   public void testShouldReturnResultSet_WithNonRowcountQueryPrefixes_SelectStillWorks() {
     List<String> prefixes = Arrays.asList("INSERT", "UPDATE", "DELETE");
     String query = "SELECT * FROM table";

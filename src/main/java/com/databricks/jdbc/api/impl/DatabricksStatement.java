@@ -685,13 +685,9 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     String trimmedQuery = trimCommentsAndWhitespaces(query);
 
     // Check configured non-rowcount prefixes first
-    if (nonRowcountQueryPrefixes != null && !nonRowcountQueryPrefixes.isEmpty()) {
-      String upperQuery = trimmedQuery.toUpperCase();
-      for (String prefix : nonRowcountQueryPrefixes) {
-        if (upperQuery.startsWith(prefix)) {
-          return true;
-        }
-      }
+    String upperQuery = trimmedQuery.toUpperCase();
+    if (nonRowcountQueryPrefixes.stream().anyMatch(upperQuery::startsWith)) {
+      return true;
     }
 
     // Check if the query matches any of the patterns that return a ResultSet
