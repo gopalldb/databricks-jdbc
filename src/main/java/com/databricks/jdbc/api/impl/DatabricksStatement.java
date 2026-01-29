@@ -76,7 +76,7 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     // TODO (PECO-1731): Can it fail fast without executing SQL query?
     checkIfClosed();
     ResultSet rs = executeInternal(sql, new HashMap<>(), StatementType.QUERY);
-    if (!shouldReturnResultSet(sql)) {
+    if (!shouldReturnResultSetWithConfig(sql)) {
       String errorMessage =
           "A ResultSet was expected but not generated from query. However, query "
               + "execution was successful.";
@@ -678,11 +678,6 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     trimmedQuery = trimmedQuery.replaceAll("\\s+", " ").trim();
 
     return trimmedQuery;
-  }
-
-  @VisibleForTesting
-  static boolean shouldReturnResultSet(String query) {
-    return shouldReturnResultSet(query, Collections.emptyList());
   }
 
   @VisibleForTesting
