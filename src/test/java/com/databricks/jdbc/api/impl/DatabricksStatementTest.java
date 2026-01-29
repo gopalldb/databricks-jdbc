@@ -19,7 +19,10 @@ import com.databricks.jdbc.model.core.StatementStatus;
 import com.databricks.sdk.service.sql.StatementState;
 import java.io.InputStream;
 import java.sql.*;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -1050,5 +1053,75 @@ public class DatabricksStatementTest {
 
     // After loop, should be able to call getLargeUpdateCount() without exception
     assertEquals(-1, statement.getLargeUpdateCount());
+  }
+
+  @Test
+  public void testShouldReturnResultSet_WithNonRowcountQueryPrefixes_Insert() {
+    List<String> prefixes = Arrays.asList("INSERT", "UPDATE", "DELETE");
+    String query = "INSERT INTO table VALUES (1, 2, 3)";
+    assertTrue(DatabricksStatement.shouldReturnResultSet(query, prefixes));
+  }
+
+  @Test
+  public void testShouldReturnResultSet_WithNonRowcountQueryPrefixes_Update() {
+    List<String> prefixes = Arrays.asList("INSERT", "UPDATE", "DELETE");
+    String query = "UPDATE table SET col = 1 WHERE id = 2";
+    assertTrue(DatabricksStatement.shouldReturnResultSet(query, prefixes));
+  }
+
+  @Test
+  public void testShouldReturnResultSet_WithNonRowcountQueryPrefixes_Delete() {
+    List<String> prefixes = Arrays.asList("INSERT", "UPDATE", "DELETE");
+    String query = "DELETE FROM table WHERE id = 1";
+    assertTrue(DatabricksStatement.shouldReturnResultSet(query, prefixes));
+  }
+
+  @Test
+  public void testShouldReturnResultSet_WithNonRowcountQueryPrefixes_Merge() {
+    List<String> prefixes = Arrays.asList("MERGE");
+    String query = "MERGE INTO target USING source ON target.id = source.id";
+    assertTrue(DatabricksStatement.shouldReturnResultSet(query, prefixes));
+  }
+
+  @Test
+  public void testShouldReturnResultSet_WithNonRowcountQueryPrefixes_CaseInsensitive() {
+    List<String> prefixes = Arrays.asList("INSERT", "UPDATE");
+    String query = "insert into table values (1, 2, 3)";
+    assertTrue(DatabricksStatement.shouldReturnResultSet(query, prefixes));
+  }
+
+  @Test
+  public void testShouldReturnResultSet_WithNonRowcountQueryPrefixes_WithComments() {
+    List<String> prefixes = Arrays.asList("INSERT", "UPDATE", "DELETE");
+    String query = "-- Comment\n/* Block comment */ INSERT INTO table VALUES (1, 2, 3)";
+    assertTrue(DatabricksStatement.shouldReturnResultSet(query, prefixes));
+  }
+
+  @Test
+  public void testShouldReturnResultSet_WithNonRowcountQueryPrefixes_NoMatch() {
+    List<String> prefixes = Arrays.asList("INSERT", "UPDATE", "DELETE");
+    String query = "CREATE TABLE test (id INT)";
+    assertFalse(DatabricksStatement.shouldReturnResultSet(query, prefixes));
+  }
+
+  @Test
+  public void testShouldReturnResultSet_WithNonRowcountQueryPrefixes_EmptyList() {
+    List<String> prefixes = Collections.emptyList();
+    String query = "INSERT INTO table VALUES (1, 2, 3)";
+    assertFalse(DatabricksStatement.shouldReturnResultSet(query, prefixes));
+  }
+
+  @Test
+  public void testShouldReturnResultSet_WithNonRowcountQueryPrefixes_NullList() {
+    List<String> prefixes = null;
+    String query = "INSERT INTO table VALUES (1, 2, 3)";
+    assertFalse(DatabricksStatement.shouldReturnResultSet(query, prefixes));
+  }
+
+  @Test
+  public void testShouldReturnResultSet_WithNonRowcountQueryPrefixes_SelectStillWorks() {
+    List<String> prefixes = Arrays.asList("INSERT", "UPDATE", "DELETE");
+    String query = "SELECT * FROM table";
+    assertTrue(DatabricksStatement.shouldReturnResultSet(query, prefixes));
   }
 }

@@ -8,6 +8,7 @@
 - Added `ThriftMaxBatchesInMemory` connection parameter to control the sliding window size for streaming (default: 3).
 - Added support for disabling CloudFetch via `EnableQueryResultDownload=0` to use inline Arrow results instead.
 - Added `EnableMetricViewSupport` connection parameter to enable/disable Metric View table type (default: disabled).
+- Added `NonRowcountQueryPrefixes` connection parameter to specify comma-separated query prefixes that should return result sets instead of row counts. For example, setting `NonRowcountQueryPrefixes=INSERT,UPDATE,DELETE` will make INSERT, UPDATE, and DELETE statements return result sets. This matches the behavior of Simba JDBC driver's NonRowcountQueryPrefixes flag (default: empty, which preserves existing behavior).
 
 ### Updated
 - Geospatial column type names now include SRID information (e.g., `GEOMETRY(4326)` instead of `GEOMETRY`).
