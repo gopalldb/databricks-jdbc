@@ -1132,4 +1132,65 @@ public class DatabricksStatementTest {
     String query = "SELECT * FROM table";
     assertTrue(DatabricksStatement.shouldReturnResultSet(query, prefixes));
   }
+
+  @Test
+  public void testExecuteInsertWithNonRowcountQueryPrefixes() throws Exception {
+    // Create connection with NonRowcountQueryPrefixes=INSERT
+    String jdbcUrlWithPrefix = JDBC_URL + "NonRowcountQueryPrefixes=INSERT";
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(jdbcUrlWithPrefix, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    String insertStatement = "INSERT INTO table VALUES (1, 2, 3)";
+
+    when(client.executeStatement(
+            eq(insertStatement),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.SQL),
+            any(IDatabricksSession.class),
+            eq(statement)))
+        .thenReturn(resultSet);
+
+    // Execute INSERT statement
+    boolean hasResultSet = statement.execute(insertStatement);
+
+    // With NonRowcountQueryPrefixes=INSERT, execute() should return true (has result set)
+    assertTrue(hasResultSet, "INSERT with NonRowcountQueryPrefixes=INSERT should return true");
+    assertNotNull(statement.getResultSet(), "ResultSet should be available");
+    assertEquals(
+        -1, statement.getUpdateCount(), "Update count should be -1 when result set is returned");
+
+    statement.close();
+  }
+
+  @Test
+  public void testExecuteInsertWithoutNonRowcountQueryPrefixes() throws Exception {
+    // Create connection without NonRowcountQueryPrefixes
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    String insertStatement = "INSERT INTO table VALUES (1, 2, 3)";
+
+    when(client.executeStatement(
+            eq(insertStatement),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.SQL),
+            any(IDatabricksSession.class),
+            eq(statement)))
+        .thenReturn(resultSet);
+
+    // Execute INSERT statement
+    boolean hasResultSet = statement.execute(insertStatement);
+
+    // Without NonRowcountQueryPrefixes, execute() should return false (update count, not result
+    // set)
+    assertFalse(hasResultSet, "INSERT without NonRowcountQueryPrefixes should return false");
+
+    statement.close();
+  }
 }
