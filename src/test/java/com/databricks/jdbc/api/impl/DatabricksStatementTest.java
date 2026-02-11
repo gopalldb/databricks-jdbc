@@ -97,13 +97,14 @@ public class DatabricksStatementTest {
 
   @Test
   public void testExecuteUpdateStatement() throws Exception {
+    String updateSql = "UPDATE table1 SET col1 = 'value'";
     IDatabricksConnectionContext connectionContext =
         DatabricksConnectionContext.parse(JDBC_URL, new Properties());
     DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
     DatabricksStatement statement = new DatabricksStatement(connection);
     when(resultSet.getUpdateCount()).thenReturn(2L);
     when(client.executeStatement(
-            eq(STATEMENT),
+            eq(updateSql),
             eq(new Warehouse(WAREHOUSE_ID)),
             eq(new HashMap<>()),
             eq(StatementType.UPDATE),
@@ -111,11 +112,11 @@ public class DatabricksStatementTest {
             eq(statement)))
         .thenReturn(resultSet);
 
-    int updateCount = statement.executeUpdate(STATEMENT);
+    int updateCount = statement.executeUpdate(updateSql);
     assertEquals(2, updateCount);
     assertFalse(statement.isClosed());
     statement.handleResultSetClose(resultSet);
-    assertEquals(2, statement.executeUpdate(STATEMENT, Statement.NO_GENERATED_KEYS));
+    assertEquals(2, statement.executeUpdate(updateSql, Statement.NO_GENERATED_KEYS));
     statement.closeOnCompletion();
     assertTrue(statement.isCloseOnCompletion());
     statement.close();
@@ -149,7 +150,6 @@ public class DatabricksStatementTest {
     DatabricksStatement statement = new DatabricksStatement(connection);
 
     // Mock DML statement (UPDATE) that returns update count
-    when(resultSet.hasUpdateCount()).thenReturn(true);
     when(resultSet.getUpdateCount()).thenReturn(5L);
     when(client.executeStatement(
             eq("UPDATE table SET col = 'value'"),
@@ -922,7 +922,6 @@ public class DatabricksStatementTest {
             any(IDatabricksSession.class),
             eq(statement)))
         .thenReturn(resultSet);
-    when(resultSet.hasUpdateCount()).thenReturn(false); // SELECT query
 
     // Execute and get result set
     statement.execute(STATEMENT);
@@ -950,7 +949,6 @@ public class DatabricksStatementTest {
             any(IDatabricksSession.class),
             eq(statement)))
         .thenReturn(resultSet);
-    when(resultSet.hasUpdateCount()).thenReturn(false); // SELECT query
 
     // Execute SELECT query
     statement.execute(STATEMENT);
@@ -975,7 +973,6 @@ public class DatabricksStatementTest {
             any(IDatabricksSession.class),
             eq(statement)))
         .thenReturn(resultSet);
-    when(resultSet.hasUpdateCount()).thenReturn(true);
     when(resultSet.getUpdateCount()).thenReturn(42L);
 
     // Execute UPDATE query
@@ -1000,7 +997,6 @@ public class DatabricksStatementTest {
             any(IDatabricksSession.class),
             eq(statement)))
         .thenReturn(resultSet);
-    when(resultSet.hasUpdateCount()).thenReturn(false);
 
     // Execute and advance past results
     statement.execute(STATEMENT);
@@ -1027,7 +1023,6 @@ public class DatabricksStatementTest {
             any(IDatabricksSession.class),
             eq(statement)))
         .thenReturn(resultSet);
-    when(resultSet.hasUpdateCount()).thenReturn(true);
     when(resultSet.getUpdateCount()).thenReturn(largeCount);
 
     // Execute UPDATE with large count
@@ -1054,7 +1049,6 @@ public class DatabricksStatementTest {
             any(IDatabricksSession.class),
             eq(statement)))
         .thenReturn(resultSet);
-    when(resultSet.hasUpdateCount()).thenReturn(false);
 
     // Execute query
     statement.execute(STATEMENT);
