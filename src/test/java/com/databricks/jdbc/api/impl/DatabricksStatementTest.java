@@ -1187,4 +1187,245 @@ public class DatabricksStatementTest {
 
     statement.close();
   }
+
+  @Test
+  public void testGetResultSet_ReturnsNullForDML() throws Exception {
+    // Test that getResultSet() returns null for DML statements (JDBC spec compliance)
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    String insertStatement = "INSERT INTO table VALUES (1, 2, 3)";
+
+    when(client.executeStatement(
+            eq(insertStatement),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.SQL),
+            any(IDatabricksSession.class),
+            eq(statement)))
+        .thenReturn(resultSet);
+
+    // Execute DML statement
+    boolean hasResultSet = statement.execute(insertStatement);
+
+    assertFalse(hasResultSet, "execute() should return false for DML");
+    assertNull(statement.getResultSet(), "getResultSet() should return null for DML");
+
+    statement.close();
+  }
+
+  @Test
+  public void testGetResultSet_BeforeExecution_ThrowsException() throws Exception {
+    // Test that getResultSet() throws exception when called before any execution
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    assertThrows(
+        SQLException.class,
+        () -> statement.getResultSet(),
+        "getResultSet() should throw exception before any execution");
+
+    statement.close();
+  }
+
+  @Test
+  public void testExecuteQuery_WithDML_ThrowsExceptionAfterExecution() throws Exception {
+    // Test that executeQuery() with DML throws exception AFTER execution (post-validation)
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    String insertStatement = "INSERT INTO table VALUES (1, 2, 3)";
+
+    when(client.executeStatement(
+            eq(insertStatement),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement)))
+        .thenReturn(resultSet);
+
+    // executeQuery() with DML should throw exception
+    SQLException exception =
+        assertThrows(
+            SQLException.class,
+            () -> statement.executeQuery(insertStatement),
+            "executeQuery() should throw exception for DML");
+
+    assertTrue(
+        exception.getMessage().contains("ResultSet was expected"),
+        "Exception message should indicate ResultSet was expected");
+    assertTrue(
+        exception.getMessage().contains("execution was successful"),
+        "Exception message should indicate execution happened");
+
+    // Verify that execution actually happened (client.executeStatement was called)
+    verify(client, times(1))
+        .executeStatement(
+            eq(insertStatement),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement));
+
+    statement.close();
+  }
+
+  @Test
+  public void testExecuteUpdate_WithSELECT_ThrowsExceptionAfterExecution() throws Exception {
+    // Test that executeUpdate() with SELECT throws exception AFTER execution (post-validation)
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    String selectStatement = "SELECT * FROM table";
+
+    when(client.executeStatement(
+            eq(selectStatement),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.UPDATE),
+            any(IDatabricksSession.class),
+            eq(statement)))
+        .thenReturn(resultSet);
+
+    // executeUpdate() with SELECT should throw exception
+    SQLException exception =
+        assertThrows(
+            SQLException.class,
+            () -> statement.executeUpdate(selectStatement),
+            "executeUpdate() should throw exception for SELECT");
+
+    assertTrue(
+        exception.getMessage().contains("update count was expected"),
+        "Exception message should indicate update count was expected");
+    assertTrue(
+        exception.getMessage().contains("execution was successful"),
+        "Exception message should indicate execution happened");
+
+    // Verify that execution actually happened
+    verify(client, times(1))
+        .executeStatement(
+            eq(selectStatement),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.UPDATE),
+            any(IDatabricksSession.class),
+            eq(statement));
+
+    statement.close();
+  }
+
+  @Test
+  public void testExecuteUpdate_WithNonRowcountQueryPrefixes_ThrowsExceptionAfterExecution()
+      throws Exception {
+    // Test that executeUpdate() with NonRowcountQueryPrefixes throws exception AFTER execution
+    String jdbcUrlWithPrefix = JDBC_URL + "NonRowcountQueryPrefixes=INSERT";
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(jdbcUrlWithPrefix, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    String insertStatement = "INSERT INTO table VALUES (1, 2, 3)";
+
+    when(client.executeStatement(
+            eq(insertStatement),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.UPDATE),
+            any(IDatabricksSession.class),
+            eq(statement)))
+        .thenReturn(resultSet);
+
+    // executeUpdate() with INSERT and NonRowcountQueryPrefixes=INSERT should throw exception
+    SQLException exception =
+        assertThrows(
+            SQLException.class,
+            () -> statement.executeUpdate(insertStatement),
+            "executeUpdate() should throw exception with NonRowcountQueryPrefixes=INSERT");
+
+    assertTrue(
+        exception.getMessage().contains("update count was expected"),
+        "Exception message should indicate update count was expected");
+
+    // Verify that execution actually happened
+    verify(client, times(1))
+        .executeStatement(
+            eq(insertStatement),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.UPDATE),
+            any(IDatabricksSession.class),
+            eq(statement));
+
+    statement.close();
+  }
+
+  @Test
+  public void testExecuteQuery_WithNonRowcountQueryPrefixes_Succeeds() throws Exception {
+    // Test that executeQuery() with DML succeeds when NonRowcountQueryPrefixes is configured
+    String jdbcUrlWithPrefix = JDBC_URL + "NonRowcountQueryPrefixes=INSERT";
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(jdbcUrlWithPrefix, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    String insertStatement = "INSERT INTO table VALUES (1, 2, 3)";
+
+    when(client.executeStatement(
+            eq(insertStatement),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement)))
+        .thenReturn(resultSet);
+
+    // executeQuery() with INSERT and NonRowcountQueryPrefixes=INSERT should succeed
+    ResultSet rs = statement.executeQuery(insertStatement);
+
+    assertNotNull(rs, "executeQuery() should return ResultSet with NonRowcountQueryPrefixes");
+
+    statement.close();
+  }
+
+  @Test
+  public void testGetResultSet_WithNonRowcountQueryPrefixes_ReturnsResultSet() throws Exception {
+    // Test that getResultSet() returns non-null for DML with NonRowcountQueryPrefixes
+    String jdbcUrlWithPrefix = JDBC_URL + "NonRowcountQueryPrefixes=INSERT";
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(jdbcUrlWithPrefix, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    String insertStatement = "INSERT INTO table VALUES (1, 2, 3)";
+
+    when(client.executeStatement(
+            eq(insertStatement),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.SQL),
+            any(IDatabricksSession.class),
+            eq(statement)))
+        .thenReturn(resultSet);
+
+    // Execute INSERT with NonRowcountQueryPrefixes
+    boolean hasResultSet = statement.execute(insertStatement);
+
+    assertTrue(hasResultSet, "execute() should return true with NonRowcountQueryPrefixes");
+    assertNotNull(
+        statement.getResultSet(),
+        "getResultSet() should return non-null with NonRowcountQueryPrefixes");
+    assertEquals(-1, statement.getUpdateCount(), "getUpdateCount() should return -1");
+
+    statement.close();
+  }
 }
