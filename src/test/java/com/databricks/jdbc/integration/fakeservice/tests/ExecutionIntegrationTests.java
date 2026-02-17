@@ -16,10 +16,7 @@ import com.databricks.jdbc.integration.fakeservice.AbstractFakeServiceIntegratio
 import com.databricks.jdbc.integration.fakeservice.FakeServiceExtension;
 import com.databricks.sdk.service.sql.StatementState;
 import com.github.tomakehurst.wiremock.client.CountMatchingStrategy;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -279,5 +276,80 @@ public class ExecutionIntegrationTests extends AbstractFakeServiceIntegrationTes
     assertEquals(
         StatementState.SUCCEEDED,
         rs2.unwrap(IDatabricksResultSet.class).getStatementStatus().getState());
+  }
+
+  // --- Statement lifecycle and property tests ---
+
+  @Test
+  void testStatement_CloseAndIsClosed() throws SQLException {
+    Statement stmt = connection.createStatement();
+    assertFalse(stmt.isClosed(), "New statement should not be closed");
+
+    stmt.close();
+    assertTrue(stmt.isClosed(), "Statement should be closed after close()");
+  }
+
+  @Test
+  void testStatement_GetConnection() throws SQLException {
+    Statement stmt = connection.createStatement();
+    Connection stmtConn = stmt.getConnection();
+    assertNotNull(stmtConn, "getConnection() should return non-null");
+    assertSame(connection, stmtConn, "getConnection() should return the parent connection");
+
+    stmt.close();
+  }
+
+  @Test
+  void testStatement_MaxRows() throws SQLException {
+    Statement stmt = connection.createStatement();
+
+    // Default maxRows should be 0 (no limit)
+    assertEquals(0, stmt.getMaxRows(), "Default maxRows should be 0");
+
+    stmt.setMaxRows(100);
+    assertEquals(100, stmt.getMaxRows(), "maxRows should be 100 after setMaxRows(100)");
+
+    // setMaxRows(0) means no limit
+    stmt.setMaxRows(0);
+    assertEquals(0, stmt.getMaxRows(), "maxRows should be 0 after setMaxRows(0)");
+
+    // Negative value should throw
+    assertThrows(
+        SQLException.class, () -> stmt.setMaxRows(-1), "setMaxRows(-1) should throw SQLException");
+
+    stmt.close();
+  }
+
+  @Test
+  void testStatement_QueryTimeout() throws SQLException {
+    Statement stmt = connection.createStatement();
+
+    // Default timeout should be 0 (no timeout)
+    assertEquals(0, stmt.getQueryTimeout(), "Default queryTimeout should be 0");
+
+    stmt.setQueryTimeout(30);
+    assertEquals(30, stmt.getQueryTimeout(), "queryTimeout should be 30 after setQueryTimeout(30)");
+
+    // Negative value should throw
+    assertThrows(
+        SQLException.class,
+        () -> stmt.setQueryTimeout(-1),
+        "setQueryTimeout(-1) should throw SQLException");
+
+    stmt.close();
+  }
+
+  @Test
+  void testStatement_Warnings() throws SQLException {
+    Statement stmt = connection.createStatement();
+
+    // getWarnings should not throw
+    SQLWarning warnings = stmt.getWarnings();
+
+    // clearWarnings should not throw
+    stmt.clearWarnings();
+    assertNull(stmt.getWarnings(), "Warnings should be null after clearWarnings()");
+
+    stmt.close();
   }
 }
