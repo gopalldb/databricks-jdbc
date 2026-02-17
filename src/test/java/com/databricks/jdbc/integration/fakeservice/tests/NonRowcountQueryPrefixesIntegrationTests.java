@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 public class NonRowcountQueryPrefixesIntegrationTests extends AbstractFakeServiceIntegrationTests {
 
   private Connection defaultConnection;
+  private Connection configuredConnection;
 
   @BeforeEach
   void setUp() throws SQLException {
@@ -30,13 +31,16 @@ public class NonRowcountQueryPrefixesIntegrationTests extends AbstractFakeServic
 
   @AfterEach
   void cleanUp() throws SQLException {
-    if (defaultConnection != null) {
-      if (((DatabricksConnection) defaultConnection).getConnectionContext().getClientType()
-              == DatabricksClientType.THRIFT
-          && getFakeServiceMode() == FakeServiceExtension.FakeServiceMode.REPLAY) {
-        // Wiremock has error in stub matching for close operation in THRIFT + REPLAY mode
-      } else {
-        defaultConnection.close();
+    for (Connection conn : new Connection[] {defaultConnection, configuredConnection}) {
+      if (conn != null) {
+        if (((DatabricksConnection) conn).getConnectionContext().getClientType()
+                == DatabricksClientType.THRIFT
+            && getFakeServiceMode() == FakeServiceExtension.FakeServiceMode.REPLAY) {
+          // Hacky fix
+          // Wiremock has error in stub matching for close operation in THRIFT + REPLAY mode
+        } else {
+          conn.close();
+        }
       }
     }
   }
@@ -45,7 +49,8 @@ public class NonRowcountQueryPrefixesIntegrationTests extends AbstractFakeServic
     Properties props = new Properties();
     props.setProperty("NonRowcountQueryPrefixes", prefixes);
     props.put(DatabricksJdbcUrlParams.ENABLE_SQL_EXEC_HYBRID_RESULTS.getParamName(), "0");
-    return getValidJDBCConnection(props);
+    configuredConnection = getValidJDBCConnection(props);
+    return configuredConnection;
   }
 
   @Test
@@ -80,7 +85,6 @@ public class NonRowcountQueryPrefixesIntegrationTests extends AbstractFakeServic
     assertTrue(hasResultSet, "With NonRowcountQueryPrefixes=INSERT, execute() should return true");
 
     deleteTable(conn, tableName);
-    conn.close();
   }
 
   @Test
@@ -99,7 +103,6 @@ public class NonRowcountQueryPrefixesIntegrationTests extends AbstractFakeServic
     assertTrue(hasResultSet, "With NonRowcountQueryPrefixes=UPDATE, execute() should return true");
 
     deleteTable(conn, tableName);
-    conn.close();
   }
 
   @Test
@@ -115,7 +118,6 @@ public class NonRowcountQueryPrefixesIntegrationTests extends AbstractFakeServic
     assertTrue(hasResultSet, "With NonRowcountQueryPrefixes=DELETE, execute() should return true");
 
     deleteTable(conn, tableName);
-    conn.close();
   }
 
   @Test
@@ -148,7 +150,6 @@ public class NonRowcountQueryPrefixesIntegrationTests extends AbstractFakeServic
     assertTrue(deleteHasRs, "DELETE should return true with multi-prefix config");
 
     deleteTable(conn, tableName);
-    conn.close();
   }
 
   @Test
@@ -159,8 +160,6 @@ public class NonRowcountQueryPrefixesIntegrationTests extends AbstractFakeServic
     // SELECT should always return true regardless of NonRowcountQueryPrefixes
     boolean hasResultSet = stmt.execute("SELECT 1 AS num");
     assertTrue(hasResultSet, "SELECT should always return true for execute()");
-
-    conn.close();
   }
 
   @Test
@@ -182,7 +181,6 @@ public class NonRowcountQueryPrefixesIntegrationTests extends AbstractFakeServic
     assertNotNull(rs, "executeQuery should return non-null ResultSet");
 
     deleteTable(conn, tableName);
-    conn.close();
   }
 
   @Test
@@ -201,6 +199,5 @@ public class NonRowcountQueryPrefixesIntegrationTests extends AbstractFakeServic
     assertTrue(hasResultSet, "NonRowcountQueryPrefixes should be case-insensitive");
 
     deleteTable(conn, tableName);
-    conn.close();
   }
 }
