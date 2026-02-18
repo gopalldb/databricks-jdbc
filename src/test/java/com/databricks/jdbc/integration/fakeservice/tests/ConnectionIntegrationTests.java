@@ -1,15 +1,13 @@
 package com.databricks.jdbc.integration.fakeservice.tests;
 
 import static com.databricks.jdbc.integration.IntegrationTestUtil.*;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 import com.databricks.jdbc.common.DatabricksJdbcUrlParams;
 import com.databricks.jdbc.exception.DatabricksSQLException;
 import com.databricks.jdbc.integration.fakeservice.AbstractFakeServiceIntegrationTests;
 import com.databricks.jdbc.integration.fakeservice.FakeServiceConfigLoader;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 
@@ -78,6 +76,43 @@ public class ConnectionIntegrationTests extends AbstractFakeServiceIntegrationTe
     extraProps.put(DatabricksJdbcUrlParams.AUTH_ACCESS_TOKEN.getParamName(), getDatabricksToken());
     Connection conn = DriverManager.getConnection(url, createConnectionProperties(extraProps));
     assert ((conn != null) && !conn.isClosed());
+
+    conn.close();
+  }
+
+  // --- Transaction and connection attribute tests ---
+
+  @Test
+  void testAutoCommit_DefaultIsTrue() throws SQLException {
+    Connection conn = getValidJDBCConnection();
+
+    assertTrue(conn.getAutoCommit(), "Default autoCommit should be true");
+
+    conn.close();
+  }
+
+  @Test
+  void testIsReadOnly_Default() throws SQLException {
+    Connection conn = getValidJDBCConnection();
+
+    boolean readOnly = conn.isReadOnly();
+    assertFalse(readOnly, "Default connection should not be read-only");
+
+    conn.close();
+  }
+
+  @Test
+  void testGetTransactionIsolation() throws SQLException {
+    Connection conn = getValidJDBCConnection();
+
+    int isolation = conn.getTransactionIsolation();
+    assertTrue(
+        isolation == Connection.TRANSACTION_NONE
+            || isolation == Connection.TRANSACTION_READ_UNCOMMITTED
+            || isolation == Connection.TRANSACTION_READ_COMMITTED
+            || isolation == Connection.TRANSACTION_REPEATABLE_READ
+            || isolation == Connection.TRANSACTION_SERIALIZABLE,
+        "Transaction isolation should be a valid JDBC constant");
 
     conn.close();
   }
