@@ -1,15 +1,14 @@
 package com.databricks.jdbc.integration.fakeservice.tests;
 
 import static com.databricks.jdbc.integration.IntegrationTestUtil.*;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.databricks.jdbc.common.DatabricksJdbcUrlParams;
 import com.databricks.jdbc.exception.DatabricksSQLException;
 import com.databricks.jdbc.integration.fakeservice.AbstractFakeServiceIntegrationTests;
 import com.databricks.jdbc.integration.fakeservice.FakeServiceConfigLoader;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 
@@ -78,6 +77,59 @@ public class ConnectionIntegrationTests extends AbstractFakeServiceIntegrationTe
     extraProps.put(DatabricksJdbcUrlParams.AUTH_ACCESS_TOKEN.getParamName(), getDatabricksToken());
     Connection conn = DriverManager.getConnection(url, createConnectionProperties(extraProps));
     assert ((conn != null) && !conn.isClosed());
+
+    conn.close();
+  }
+
+  // --- Catalog and schema switching tests ---
+
+  @Test
+  void testSetAndGetCatalog() throws SQLException {
+    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
+    Connection conn = getValidJDBCConnection();
+
+    String originalCatalog = conn.getCatalog();
+    assertNotNull(originalCatalog, "getCatalog() should return non-null");
+
+    // Set catalog to the test catalog (which we know exists)
+    String testCatalog = getDatabricksCatalog();
+    conn.setCatalog(testCatalog);
+    assertEquals(testCatalog, conn.getCatalog(), "getCatalog() should return what was set");
+
+    conn.close();
+  }
+
+  @Test
+  void testSetAndGetSchema() throws SQLException {
+    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
+    Connection conn = getValidJDBCConnection();
+
+    String originalSchema = conn.getSchema();
+    assertNotNull(originalSchema, "getSchema() should return non-null");
+
+    // First switch to the test catalog so the test schema is accessible
+    conn.setCatalog(getDatabricksCatalog());
+
+    // Set schema to the test schema (which exists in the test catalog)
+    String testSchema = getDatabricksSchema();
+    conn.setSchema(testSchema);
+    assertEquals(testSchema, conn.getSchema(), "getSchema() should return what was set");
+
+    conn.close();
+  }
+
+  @Test
+  void testSetAndGetClientInfo() throws SQLException {
+    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
+    Connection conn = getValidJDBCConnection();
+
+    // getClientInfo() should return non-null Properties
+    Properties clientInfo = conn.getClientInfo();
+    assertNotNull(clientInfo, "getClientInfo() should return non-null Properties");
+
+    // getClientInfo(name) for unknown property should return null
+    String value = conn.getClientInfo("NonExistentProperty");
+    assertNull(value, "getClientInfo for unknown property should return null");
 
     conn.close();
   }
