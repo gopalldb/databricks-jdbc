@@ -80,6 +80,39 @@ public class ConnectionIntegrationTests extends AbstractFakeServiceIntegrationTe
     conn.close();
   }
 
+  // --- Connection properties and management tests ---
+
+  @Test
+  void testIsClosed_NewConnection() throws SQLException {
+    Connection conn = getValidJDBCConnection();
+    assertFalse(conn.isClosed(), "Newly created connection should not be closed");
+
+    conn.close();
+    assertTrue(conn.isClosed(), "Connection should be closed after close()");
+  }
+
+  @Test
+  void testIsValid_ActiveConnection() throws SQLException {
+    Connection conn = getValidJDBCConnection();
+
+    // isValid with a positive timeout should return true for an active connection
+    assertTrue(conn.isValid(5), "Active connection should be valid");
+
+    conn.close();
+    assertFalse(conn.isValid(5), "Closed connection should not be valid");
+  }
+
+  @Test
+  void testGetCatalog_ReturnsNonNull() throws SQLException {
+    Connection conn = getValidJDBCConnection();
+
+    String catalog = conn.getCatalog();
+    assertNotNull(catalog, "getCatalog() should return non-null for active connection");
+    assertFalse(catalog.isEmpty(), "getCatalog() should return non-empty string");
+
+    conn.close();
+  }
+
   // --- Transaction and connection attribute tests ---
 
   @Test
@@ -92,11 +125,57 @@ public class ConnectionIntegrationTests extends AbstractFakeServiceIntegrationTe
   }
 
   @Test
+  void testGetSchema_ReturnsNonNull() throws SQLException {
+    Connection conn = getValidJDBCConnection();
+
+    String schema = conn.getSchema();
+    assertNotNull(schema, "getSchema() should return non-null for active connection");
+    assertFalse(schema.isEmpty(), "getSchema() should return non-empty string");
+
+    conn.close();
+  }
+
+  @Test
   void testIsReadOnly_Default() throws SQLException {
     Connection conn = getValidJDBCConnection();
 
     boolean readOnly = conn.isReadOnly();
     assertFalse(readOnly, "Default connection should not be read-only");
+
+    conn.close();
+  }
+
+  @Test
+  void testGetMetaData_ReturnsNonNull() throws SQLException {
+    Connection conn = getValidJDBCConnection();
+
+    DatabaseMetaData metaData = conn.getMetaData();
+    assertNotNull(metaData, "getMetaData() should return non-null");
+    assertNotNull(metaData.getDriverName(), "Driver name should not be null");
+    assertFalse(metaData.getDriverName().isEmpty(), "Driver name should not be empty");
+
+    conn.close();
+  }
+
+  @Test
+  void testGetWarnings_AndClearWarnings() throws SQLException {
+    Connection conn = getValidJDBCConnection();
+
+    // New connection may or may not have warnings, but getWarnings() should not throw
+    SQLWarning warnings = conn.getWarnings();
+    // clearWarnings should not throw
+    conn.clearWarnings();
+    assertNull(conn.getWarnings(), "Warnings should be null after clearWarnings()");
+
+    conn.close();
+  }
+
+  @Test
+  void testGetClientInfo_ReturnsProperties() throws SQLException {
+    Connection conn = getValidJDBCConnection();
+
+    Properties clientInfo = conn.getClientInfo();
+    assertNotNull(clientInfo, "getClientInfo() should return non-null Properties");
 
     conn.close();
   }
