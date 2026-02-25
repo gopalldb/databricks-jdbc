@@ -688,7 +688,6 @@ public class MetadataIntegrationTests extends AbstractFakeServiceIntegrationTest
 
   @Test
   void testDatabaseMetaData_GetIndexInfo() throws SQLException {
-    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
     String tableName = "meta_index_info_table";
     String createSQL =
         "CREATE TABLE IF NOT EXISTS "
