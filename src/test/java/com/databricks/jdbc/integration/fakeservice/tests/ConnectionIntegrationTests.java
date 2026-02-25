@@ -94,6 +94,8 @@ public class ConnectionIntegrationTests extends AbstractFakeServiceIntegrationTe
   @Test
   void testIsValid_ActiveConnection() throws SQLException {
     Connection conn = getValidJDBCConnection();
+
+    // isValid with a positive timeout should return true for an active connection
     assertTrue(conn.isValid(5), "Active connection should be valid");
 
     conn.close();
