@@ -554,7 +554,6 @@ public class MetadataIntegrationTests extends AbstractFakeServiceIntegrationTest
 
   @Test
   void testDatabaseMetaData_GetTypeInfo() throws SQLException {
-    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
     DatabaseMetaData metaData = connection.getMetaData();
     try (ResultSet typeInfo = metaData.getTypeInfo()) {
       assertNotNull(typeInfo, "getTypeInfo() should return non-null");
@@ -584,7 +583,6 @@ public class MetadataIntegrationTests extends AbstractFakeServiceIntegrationTest
 
   @Test
   void testDatabaseMetaData_GetProcedures() throws SQLException {
-    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
     DatabaseMetaData metaData = connection.getMetaData();
     try (ResultSet procedures =
         metaData.getProcedures(getDatabricksCatalog(), getDatabricksSchema(), "%")) {
@@ -595,7 +593,6 @@ public class MetadataIntegrationTests extends AbstractFakeServiceIntegrationTest
 
   @Test
   void testDatabaseMetaData_GetProcedureColumns() throws SQLException {
-    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
     DatabaseMetaData metaData = connection.getMetaData();
     try (ResultSet procCols =
         metaData.getProcedureColumns(getDatabricksCatalog(), getDatabricksSchema(), "%", "%")) {
@@ -605,7 +602,6 @@ public class MetadataIntegrationTests extends AbstractFakeServiceIntegrationTest
 
   @Test
   void testDatabaseMetaData_GetFunctions() throws SQLException {
-    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
     DatabaseMetaData metaData = connection.getMetaData();
     try (ResultSet functions =
         metaData.getFunctions(getDatabricksCatalog(), getDatabricksSchema(), "%")) {
@@ -643,7 +639,6 @@ public class MetadataIntegrationTests extends AbstractFakeServiceIntegrationTest
 
   @Test
   void testDatabaseMetaData_GetExportedKeys() throws SQLException {
-    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
     String tableName = "meta_exported_keys_table";
     String createSQL =
         "CREATE TABLE IF NOT EXISTS "
@@ -741,7 +736,6 @@ public class MetadataIntegrationTests extends AbstractFakeServiceIntegrationTest
 
   @Test
   void testDatabaseMetaData_GetVersionColumns() throws SQLException {
-    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
     String tableName = "meta_version_cols_table";
     String createSQL =
         "CREATE TABLE IF NOT EXISTS "
@@ -810,7 +804,6 @@ public class MetadataIntegrationTests extends AbstractFakeServiceIntegrationTest
 
   @Test
   void testDatabaseMetaData_GetAttributes() throws SQLException {
-    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
     DatabaseMetaData metaData = connection.getMetaData();
     try (ResultSet attrs =
         metaData.getAttributes(getDatabricksCatalog(), getDatabricksSchema(), "%", "%")) {
