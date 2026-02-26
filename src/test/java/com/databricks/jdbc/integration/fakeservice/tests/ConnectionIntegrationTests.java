@@ -2,7 +2,6 @@ package com.databricks.jdbc.integration.fakeservice.tests;
 
 import static com.databricks.jdbc.integration.IntegrationTestUtil.*;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.databricks.jdbc.common.DatabricksJdbcUrlParams;
 import com.databricks.jdbc.exception.DatabricksSQLException;
@@ -85,7 +84,6 @@ public class ConnectionIntegrationTests extends AbstractFakeServiceIntegrationTe
 
   @Test
   void testSetAndGetCatalog() throws SQLException {
-    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
     Connection conn = getValidJDBCConnection();
 
     String originalCatalog = conn.getCatalog();
@@ -143,7 +141,6 @@ public class ConnectionIntegrationTests extends AbstractFakeServiceIntegrationTe
 
   @Test
   void testSetAndGetSchema() throws SQLException {
-    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
     Connection conn = getValidJDBCConnection();
 
     String originalSchema = conn.getSchema();
@@ -173,7 +170,6 @@ public class ConnectionIntegrationTests extends AbstractFakeServiceIntegrationTe
 
   @Test
   void testSetAndGetClientInfo() throws SQLException {
-    assumeTrue(isSqlExecSdkClient(), "Thrift recording not available for this test");
     Connection conn = getValidJDBCConnection();
 
     // getClientInfo() should return non-null Properties
