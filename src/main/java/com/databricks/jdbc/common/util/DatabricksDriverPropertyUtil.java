@@ -132,7 +132,11 @@ public class DatabricksDriverPropertyUtil {
           case TOKEN_PASSTHROUGH:
             if (connectionContext.getOAuthRefreshToken() != null) {
               addMissingProperty(missingPropertyInfos, connectionContext, CLIENT_ID, true);
-              addMissingProperty(missingPropertyInfos, connectionContext, CLIENT_SECRET, true);
+              if (!(connectionContext.isOAuthSecretFromPwdEnabled()
+                  && (connectionContext.isPropertyPresent(PWD)
+                      || connectionContext.isPropertyPresent(PASSWORD)))) {
+                addMissingProperty(missingPropertyInfos, connectionContext, CLIENT_SECRET, true);
+              }
               handleTokenEndpointAndDiscoveryMode(missingPropertyInfos, connectionContext);
             } else {
               addMissingProperty(
@@ -149,7 +153,11 @@ public class DatabricksDriverPropertyUtil {
             } else if (connectionContext.getCloud() == Cloud.AZURE) {
               addMissingProperty(missingPropertyInfos, connectionContext, AZURE_TENANT_ID, false);
             }
-            addMissingProperty(missingPropertyInfos, connectionContext, CLIENT_SECRET, true);
+            if (!(connectionContext.isOAuthSecretFromPwdEnabled()
+                && (connectionContext.isPropertyPresent(PWD)
+                    || connectionContext.isPropertyPresent(PASSWORD)))) {
+              addMissingProperty(missingPropertyInfos, connectionContext, CLIENT_SECRET, true);
+            }
             addMissingProperty(missingPropertyInfos, connectionContext, CLIENT_ID, true);
 
             if (connectionContext.isPropertyPresent(USE_JWT_ASSERTION)) {

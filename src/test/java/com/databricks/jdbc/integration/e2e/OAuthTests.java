@@ -17,6 +17,12 @@ public class OAuthTests {
   }
 
   @Test
+  void testM2MWithSecretFromPwd() throws SQLException {
+    Connection connection = getValidM2MConnectionWithSecretFromPwd();
+    assertDoesNotThrow(() -> connection.createStatement().execute("select 1"));
+  }
+
+  @Test
   void testPAT() throws SQLException {
     Properties connectionProperties = new Properties();
     connectionProperties.put(UID, getDatabricksUser());

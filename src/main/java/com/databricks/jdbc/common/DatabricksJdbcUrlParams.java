@@ -219,7 +219,9 @@ public enum DatabricksJdbcUrlParams {
   NON_ROWCOUNT_QUERY_PREFIXES(
       "NonRowcountQueryPrefixes",
       "Comma-separated list of query prefixes (like INSERT,UPDATE,DELETE) that should return result sets instead of row counts",
-      "");
+      ""),
+  ENABLE_OAUTH_SECRET_FROM_PWD(
+      "EnableOAuthSecretFromPwd", "Read OAuth secret/token from PWD/password property", "0");
 
   private final String paramName;
   private final String defaultValue;

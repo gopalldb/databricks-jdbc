@@ -468,4 +468,7 @@ public interface IDatabricksConnectionContext {
    * @return the link prefetch window size (default: 128)
    */
   int getLinkPrefetchWindow();
+
+  /** Returns whether the driver should read OAuth secret from PWD/password property. */
+  boolean isOAuthSecretFromPwdEnabled();
 }

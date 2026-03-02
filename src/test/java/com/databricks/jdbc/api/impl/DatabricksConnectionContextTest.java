@@ -1357,4 +1357,173 @@ class DatabricksConnectionContextTest {
             TestConstants.VALID_URL_1 + ";OAuthWebServerTimeout=300", properties);
     assertEquals(300, connectionContext.getOAuthWebServerTimeout());
   }
+
+  // ===== OAuth Secret from PWD Tests =====
+
+  private static final String OAUTH_M2M_BASE_URL =
+      "jdbc:databricks://sample-host.cloud.databricks.com:9999/default;AuthMech=11;Auth_Flow=1;"
+          + "httpPath=/sql/1.0/warehouses/9999999999999999";
+
+  @Test
+  public void testGetClientSecret_WithOAuthSecretFromPwd_ReadsFromPassword()
+      throws DatabricksSQLException {
+    String url = OAUTH_M2M_BASE_URL + ";EnableOAuthSecretFromPwd=1";
+    Properties props = new Properties();
+    props.setProperty("password", "my-oauth-secret");
+
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext) DatabricksConnectionContext.parse(url, props);
+    assertEquals("my-oauth-secret", ctx.getClientSecret());
+    assertTrue(ctx.isOAuthSecretFromPwdEnabled());
+  }
+
+  @Test
+  public void testGetClientSecret_WithOAuthSecretFromPwd_PwdWinsOverExplicitSecret()
+      throws DatabricksSQLException {
+    // When feature is enabled, PWD/password always takes precedence over OAuth2Secret
+    String url = OAUTH_M2M_BASE_URL + ";EnableOAuthSecretFromPwd=1";
+    Properties props = new Properties();
+    props.setProperty("password", "password-value");
+    props.setProperty("OAuth2Secret", "explicit-secret");
+
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext) DatabricksConnectionContext.parse(url, props);
+    assertEquals("password-value", ctx.getClientSecret());
+  }
+
+  @Test
+  public void testGetClientSecret_WithOAuthSecretFromPwd_PwdParamWinsOverExplicitSecret()
+      throws DatabricksSQLException {
+    // Same as above but with pwd param instead of password
+    String url = OAUTH_M2M_BASE_URL + ";EnableOAuthSecretFromPwd=1";
+    Properties props = new Properties();
+    props.setProperty("pwd", "pwd-value");
+    props.setProperty("OAuth2Secret", "explicit-secret");
+
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext) DatabricksConnectionContext.parse(url, props);
+    assertEquals("pwd-value", ctx.getClientSecret());
+  }
+
+  @Test
+  public void testGetClientSecret_WithoutFeatureFlag_DoesNotReadPwd()
+      throws DatabricksSQLException {
+    Properties props = new Properties();
+    props.setProperty("password", "my-oauth-secret");
+
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext) DatabricksConnectionContext.parse(OAUTH_M2M_BASE_URL, props);
+    assertNull(ctx.getClientSecret());
+    assertFalse(ctx.isOAuthSecretFromPwdEnabled());
+  }
+
+  @Test
+  public void testGetClientSecret_WithoutFeatureFlag_ReadsExplicitSecret()
+      throws DatabricksSQLException {
+    // When feature is disabled, OAuth2Secret is used as normal
+    Properties props = new Properties();
+    props.setProperty("password", "password-value");
+    props.setProperty("OAuth2Secret", "explicit-secret");
+
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext) DatabricksConnectionContext.parse(OAUTH_M2M_BASE_URL, props);
+    assertEquals("explicit-secret", ctx.getClientSecret());
+    assertFalse(ctx.isOAuthSecretFromPwdEnabled());
+  }
+
+  @Test
+  public void testGetClientSecret_WithOAuthSecretFromPwd_ReadsFromPwdParam()
+      throws DatabricksSQLException {
+    String url = OAUTH_M2M_BASE_URL + ";EnableOAuthSecretFromPwd=1";
+    Properties props = new Properties();
+    props.setProperty("pwd", "pwd-value");
+
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext) DatabricksConnectionContext.parse(url, props);
+    assertEquals("pwd-value", ctx.getClientSecret());
+  }
+
+  @Test
+  public void testGetClientSecret_WithOAuthSecretFromPwd_NoPwdProvided_ThrowsError()
+      throws DatabricksSQLException {
+    // When feature is enabled but no PWD/password is provided, should throw error
+    String url = OAUTH_M2M_BASE_URL + ";EnableOAuthSecretFromPwd=1";
+    Properties props = new Properties();
+
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext) DatabricksConnectionContext.parse(url, props);
+    DatabricksDriverException ex =
+        assertThrows(DatabricksDriverException.class, ctx::getClientSecret);
+    assertTrue(ex.getMessage().contains("EnableOAuthSecretFromPwd is enabled"));
+    assertTrue(ex.getMessage().contains("PWD or password"));
+  }
+
+  @Test
+  public void testGetClientSecret_WithOAuthSecretFromPwd_ExplicitSecretOnly_NoPwd_ThrowsError()
+      throws DatabricksSQLException {
+    // When feature is enabled, OAuth2Secret provided but no PWD — should throw error
+    // because the feature mandates reading from PWD
+    String url = OAUTH_M2M_BASE_URL + ";EnableOAuthSecretFromPwd=1";
+    Properties props = new Properties();
+    props.setProperty("OAuth2Secret", "explicit-secret");
+
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext) DatabricksConnectionContext.parse(url, props);
+    DatabricksDriverException ex =
+        assertThrows(DatabricksDriverException.class, ctx::getClientSecret);
+    assertTrue(ex.getMessage().contains("EnableOAuthSecretFromPwd is enabled"));
+  }
+
+  @Test
+  public void testGetClientSecret_FeatureDisabledExplicitly_DoesNotReadPwd()
+      throws DatabricksSQLException {
+    // Explicitly set EnableOAuthSecretFromPwd=0
+    String url = OAUTH_M2M_BASE_URL + ";EnableOAuthSecretFromPwd=0";
+    Properties props = new Properties();
+    props.setProperty("password", "my-oauth-secret");
+
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext) DatabricksConnectionContext.parse(url, props);
+    assertNull(ctx.getClientSecret());
+    assertFalse(ctx.isOAuthSecretFromPwdEnabled());
+  }
+
+  @Test
+  public void testGetClientSecret_FeatureEnabled_PasswordInUrl() throws DatabricksSQLException {
+    // Password provided in the JDBC URL itself (not via Properties)
+    String url = OAUTH_M2M_BASE_URL + ";EnableOAuthSecretFromPwd=1;pwd=url-secret";
+    Properties props = new Properties();
+
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext) DatabricksConnectionContext.parse(url, props);
+    assertEquals("url-secret", ctx.getClientSecret());
+  }
+
+  @Test
+  public void testGetClientSecret_FeatureEnabled_BrowserBasedAuth() throws DatabricksSQLException {
+    // Browser-based auth (Auth_Flow=2) with EnableOAuthSecretFromPwd
+    String url =
+        "jdbc:databricks://sample-host.cloud.databricks.com:9999/default;AuthMech=11;Auth_Flow=2;"
+            + "httpPath=/sql/1.0/warehouses/9999999999999999;EnableOAuthSecretFromPwd=1";
+    Properties props = new Properties();
+    props.setProperty("password", "browser-secret");
+
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext) DatabricksConnectionContext.parse(url, props);
+    assertEquals("browser-secret", ctx.getClientSecret());
+  }
+
+  @Test
+  public void testGetClientSecret_FeatureEnabled_RefreshTokenFlow() throws DatabricksSQLException {
+    // Refresh token flow (Auth_Flow=0) with EnableOAuthSecretFromPwd
+    String url =
+        "jdbc:databricks://sample-host.cloud.databricks.com:9999/default;AuthMech=11;Auth_Flow=0;"
+            + "httpPath=/sql/1.0/warehouses/9999999999999999;EnableOAuthSecretFromPwd=1";
+    Properties props = new Properties();
+    props.setProperty("password", "refresh-secret");
+
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext) DatabricksConnectionContext.parse(url, props);
+    assertEquals("refresh-secret", ctx.getClientSecret());
+  }
 }

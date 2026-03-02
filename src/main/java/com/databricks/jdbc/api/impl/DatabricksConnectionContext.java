@@ -340,7 +340,23 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
 
   @Override
   public String getClientSecret() {
+    if (isOAuthSecretFromPwdEnabled()) {
+      String pwdSecret =
+          getParameter(DatabricksJdbcUrlParams.PWD, getParameter(DatabricksJdbcUrlParams.PASSWORD));
+      if (pwdSecret == null) {
+        throw new DatabricksDriverException(
+            "EnableOAuthSecretFromPwd is enabled but no PWD/password property was provided."
+                + " Set the OAuth client secret via the PWD or password connection property.",
+            DatabricksDriverErrorCode.INPUT_VALIDATION_ERROR);
+      }
+      return pwdSecret;
+    }
     return getParameter(DatabricksJdbcUrlParams.CLIENT_SECRET);
+  }
+
+  @Override
+  public boolean isOAuthSecretFromPwdEnabled() {
+    return getParameter(DatabricksJdbcUrlParams.ENABLE_OAUTH_SECRET_FROM_PWD).equals("1");
   }
 
   @Override

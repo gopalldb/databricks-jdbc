@@ -140,6 +140,14 @@ public class IntegrationTestUtil {
     return DriverManager.getConnection(getJdbcM2MUrl(), createM2MConnectionProperties());
   }
 
+  public static Connection getValidM2MConnectionWithSecretFromPwd() throws SQLException {
+    String url = getJdbcM2MUrl() + ";EnableOAuthSecretFromPwd=1";
+    Properties connProps = new Properties();
+    connProps.put("OAuth2ClientId", System.getenv("DATABRICKS_JDBC_M2M_CLIENT_ID"));
+    connProps.put("password", System.getenv("DATABRICKS_JDBC_M2M_CLIENT_SECRET"));
+    return DriverManager.getConnection(url, connProps);
+  }
+
   public static Connection getValidSPTokenFedConnection() throws SQLException {
     return DriverManager.getConnection(getSPTokenFedUrl(), createSPTokenFedConnectionProperties());
   }

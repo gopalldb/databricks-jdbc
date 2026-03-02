@@ -4,6 +4,7 @@
 
 ### Added
 - Added connection property `OAuthWebServerTimeout` to configure the OAuth browser authentication timeout for U2M (user-to-machine) flows, and also updated hardcoded 1-hour timeout to default 120 seconds timeout.
+- Added connection property `EnableOAuthSecretFromPwd` to allow reading the OAuth client secret from the `PWD`/`password` property instead of `OAuth2Secret`. This enables BI tools to mask the secret using their built-in password field handling. When enabled, it will only be read from `PWD`/`password`.
 
 ### Updated
 

@@ -47,6 +47,64 @@ public class M2MAuthIntegrationTests extends AbstractFakeServiceIntegrationTests
         .contains("Connection failure while using the OSS Databricks JDBC driver.");
   }
 
+  @Test
+  void testSuccessfulM2MConnectionWithSecretFromPwd() throws SQLException {
+    String url = getFakeServiceM2MUrl() + "EnableOAuthSecretFromPwd=1;";
+    Properties connProps = new Properties();
+    connProps.put("OAuth2ClientId", TEST_CLIENT_ID);
+    connProps.put("password", TEST_CLIENT_SECRET);
+    connProps.put(
+        DatabricksJdbcUrlParams.CONN_CATALOG.getParamName(),
+        FakeServiceConfigLoader.getProperty(DatabricksJdbcUrlParams.CONN_CATALOG.getParamName()));
+    connProps.put(
+        DatabricksJdbcUrlParams.CONN_SCHEMA.getParamName(),
+        FakeServiceConfigLoader.getProperty(DatabricksJdbcUrlParams.CONN_SCHEMA.getParamName()));
+
+    Connection conn = DriverManager.getConnection(url, connProps);
+    assertNotNull(conn);
+    assertFalse(conn.isClosed());
+    conn.close();
+  }
+
+  @Test
+  void testM2MWithSecretFromPwd_PwdWinsOverExplicitSecret() throws SQLException {
+    // When EnableOAuthSecretFromPwd=1, PWD/password takes precedence over OAuth2Secret.
+    // Providing the correct secret in password and an invalid one in OAuth2Secret should succeed.
+    String url = getFakeServiceM2MUrl() + "EnableOAuthSecretFromPwd=1;";
+    Properties connProps = new Properties();
+    connProps.put("OAuth2ClientId", TEST_CLIENT_ID);
+    connProps.put("password", TEST_CLIENT_SECRET);
+    connProps.put("OAuth2Secret", "invalid-should-be-ignored");
+    connProps.put(
+        DatabricksJdbcUrlParams.CONN_CATALOG.getParamName(),
+        FakeServiceConfigLoader.getProperty(DatabricksJdbcUrlParams.CONN_CATALOG.getParamName()));
+    connProps.put(
+        DatabricksJdbcUrlParams.CONN_SCHEMA.getParamName(),
+        FakeServiceConfigLoader.getProperty(DatabricksJdbcUrlParams.CONN_SCHEMA.getParamName()));
+
+    Connection conn = DriverManager.getConnection(url, connProps);
+    assertNotNull(conn);
+    assertFalse(conn.isClosed());
+    conn.close();
+  }
+
+  @Test
+  void testM2MWithSecretFromPwd_NoPwdProvided_ThrowsError() {
+    // EnableOAuthSecretFromPwd=1 but no PWD/password — should fail with validation error
+    String url = getFakeServiceM2MUrl() + "EnableOAuthSecretFromPwd=1;";
+    Properties connProps = new Properties();
+    connProps.put("OAuth2ClientId", TEST_CLIENT_ID);
+    connProps.put(
+        DatabricksJdbcUrlParams.CONN_CATALOG.getParamName(),
+        FakeServiceConfigLoader.getProperty(DatabricksJdbcUrlParams.CONN_CATALOG.getParamName()));
+    connProps.put(
+        DatabricksJdbcUrlParams.CONN_SCHEMA.getParamName(),
+        FakeServiceConfigLoader.getProperty(DatabricksJdbcUrlParams.CONN_SCHEMA.getParamName()));
+
+    Exception e = assertThrows(Exception.class, () -> DriverManager.getConnection(url, connProps));
+    assertTrue(e.getMessage().contains("EnableOAuthSecretFromPwd is enabled"));
+  }
+
   private Connection getValidM2MConnection() throws SQLException {
     return DriverManager.getConnection(
         getFakeServiceM2MUrl(), createFakeServiceM2MConnectionProperties(TEST_CLIENT_SECRET));
