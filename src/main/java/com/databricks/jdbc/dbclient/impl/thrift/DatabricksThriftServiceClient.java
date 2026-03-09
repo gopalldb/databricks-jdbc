@@ -257,8 +257,9 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
       request.setResultRowLimit(maxRows);
     }
 
-    if (statementType != StatementType.METADATA
-        && (runAsync || !DriverUtil.isRunningAgainstFake())) {
+    if (statementType == StatementType.METADATA) {
+      request.setRunAsync(false);
+    } else if (runAsync || !DriverUtil.isRunningAgainstFake()) {
       request.setRunAsync(true);
     }
 

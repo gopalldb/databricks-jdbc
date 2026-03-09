@@ -707,6 +707,7 @@ public class DatabricksThriftServiceClientTest {
             .setCanDecompressLZ4Result(true)
             .setCanDownloadResult(true)
             .setQueryTimeout(0)
+            .setRunAsync(false)
             .setParameters(Collections.emptyList())
             .setUseArrowNativeTypes(arrowNativeTypes);
     when(thriftAccessor.execute(executeStatementReq, null, session, StatementType.METADATA))
