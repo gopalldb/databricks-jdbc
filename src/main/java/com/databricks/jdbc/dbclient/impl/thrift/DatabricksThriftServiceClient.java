@@ -18,6 +18,7 @@ import com.databricks.jdbc.common.StatementType;
 import com.databricks.jdbc.common.util.DatabricksThreadContextHolder;
 import com.databricks.jdbc.common.util.DriverUtil;
 import com.databricks.jdbc.common.util.ProtocolFeatureUtil;
+import com.databricks.jdbc.common.util.WildcardUtil;
 import com.databricks.jdbc.dbclient.IDatabricksClient;
 import com.databricks.jdbc.dbclient.IDatabricksMetadataClient;
 import com.databricks.jdbc.dbclient.impl.common.MetadataResultSetBuilder;
@@ -442,7 +443,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetSchemasReq request =
         new TGetSchemasReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setCatalogName(catalog);
+            .setCatalogName(maybeEscapeCatalogName(catalog));
     if (schemaNamePattern != null) {
       request.setSchemaName(schemaNamePattern);
     }
@@ -476,7 +477,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetTablesReq request =
         new TGetTablesReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setCatalogName(catalog)
+            .setCatalogName(maybeEscapeCatalogName(catalog))
             .setSchemaName(schemaNamePattern)
             .setTableName(tableNamePattern);
     if (tableTypes != null) {
@@ -521,7 +522,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetColumnsReq request =
         new TGetColumnsReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setCatalogName(catalog)
+            .setCatalogName(maybeEscapeCatalogName(catalog))
             .setSchemaName(schemaNamePattern)
             .setTableName(tableNamePattern)
             .setColumnName(columnNamePattern);
@@ -585,7 +586,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetFunctionsReq request =
         new TGetFunctionsReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setCatalogName(catalog)
+            .setCatalogName(maybeEscapeCatalogName(catalog))
             .setSchemaName(schemaNamePattern)
             .setFunctionName(functionNamePattern);
     if (ProtocolFeatureUtil.supportsAsyncMetadataExecution(serverProtocolVersion)) {
@@ -613,7 +614,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetPrimaryKeysReq request =
         new TGetPrimaryKeysReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setCatalogName(catalog)
+            .setCatalogName(maybeEscapeCatalogName(catalog))
             .setSchemaName(schema)
             .setTableName(table);
     if (ProtocolFeatureUtil.supportsAsyncMetadataExecution(serverProtocolVersion)) {
@@ -643,7 +644,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetCrossReferenceReq request =
         new TGetCrossReferenceReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setForeignCatalogName(catalog)
+            .setForeignCatalogName(maybeEscapeCatalogName(catalog))
             .setForeignSchemaName(schema)
             .setForeignTableName(table);
     if (ProtocolFeatureUtil.supportsAsyncMetadataExecution(serverProtocolVersion)) {
@@ -671,7 +672,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetCrossReferenceReq request =
         new TGetCrossReferenceReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setParentCatalogName(catalog)
+            .setParentCatalogName(maybeEscapeCatalogName(catalog))
             .setParentSchemaName(schema)
             .setParentTableName(table);
     if (ProtocolFeatureUtil.supportsAsyncMetadataExecution(serverProtocolVersion)) {
@@ -711,10 +712,10 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetCrossReferenceReq request =
         new TGetCrossReferenceReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setParentCatalogName(parentCatalog)
+            .setParentCatalogName(maybeEscapeCatalogName(parentCatalog))
             .setParentSchemaName(parentSchema)
             .setParentTableName(parentTable)
-            .setForeignCatalogName(foreignCatalog)
+            .setForeignCatalogName(maybeEscapeCatalogName(foreignCatalog))
             .setForeignSchemaName(foreignSchema)
             .setForeignTableName(foreignTable);
     if (ProtocolFeatureUtil.supportsAsyncMetadataExecution(serverProtocolVersion)) {
@@ -733,6 +734,13 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
   @Override
   public DatabricksConfig getDatabricksConfig() {
     return thriftAccessor.getDatabricksConfig();
+  }
+
+  private String maybeEscapeCatalogName(String catalogName) {
+    if (!connectionContext.treatMetadataCatalogNameAsPattern()) {
+      return WildcardUtil.escapeCatalogName(catalogName);
+    }
+    return catalogName;
   }
 
   private TNamespace getNamespace(String catalog, String schema) {
