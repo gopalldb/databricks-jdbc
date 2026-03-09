@@ -614,7 +614,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetPrimaryKeysReq request =
         new TGetPrimaryKeysReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setCatalogName(maybeEscapeCatalogName(catalog))
+            .setCatalogName(catalog)
             .setSchemaName(schema)
             .setTableName(table);
     if (ProtocolFeatureUtil.supportsAsyncMetadataExecution(serverProtocolVersion)) {
@@ -644,7 +644,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetCrossReferenceReq request =
         new TGetCrossReferenceReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setForeignCatalogName(maybeEscapeCatalogName(catalog))
+            .setForeignCatalogName(catalog)
             .setForeignSchemaName(schema)
             .setForeignTableName(table);
     if (ProtocolFeatureUtil.supportsAsyncMetadataExecution(serverProtocolVersion)) {
@@ -672,7 +672,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetCrossReferenceReq request =
         new TGetCrossReferenceReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setParentCatalogName(maybeEscapeCatalogName(catalog))
+            .setParentCatalogName(catalog)
             .setParentSchemaName(schema)
             .setParentTableName(table);
     if (ProtocolFeatureUtil.supportsAsyncMetadataExecution(serverProtocolVersion)) {
@@ -712,10 +712,10 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetCrossReferenceReq request =
         new TGetCrossReferenceReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setParentCatalogName(maybeEscapeCatalogName(parentCatalog))
+            .setParentCatalogName(parentCatalog)
             .setParentSchemaName(parentSchema)
             .setParentTableName(parentTable)
-            .setForeignCatalogName(maybeEscapeCatalogName(foreignCatalog))
+            .setForeignCatalogName(foreignCatalog)
             .setForeignSchemaName(foreignSchema)
             .setForeignTableName(foreignTable);
     if (ProtocolFeatureUtil.supportsAsyncMetadataExecution(serverProtocolVersion)) {

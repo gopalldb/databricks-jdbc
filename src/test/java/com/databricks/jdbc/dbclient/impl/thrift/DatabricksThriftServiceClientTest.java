@@ -1116,32 +1116,4 @@ public class DatabricksThriftServiceClientTest {
     verify(thriftAccessor).getThriftResponse(captor.capture());
     assertEquals("my_catalog", captor.getValue().getCatalogName());
   }
-
-  @Test
-  void testListCrossReferencesEscapesBothCatalogs() throws SQLException {
-    when(connectionContext.treatMetadataCatalogNameAsPattern()).thenReturn(false);
-    DatabricksThriftServiceClient client =
-        new DatabricksThriftServiceClient(thriftAccessor, connectionContext);
-    when(session.getSessionInfo()).thenReturn(SESSION_INFO);
-    client.setServerProtocolVersion(TProtocolVersion.SPARK_CLI_SERVICE_PROTOCOL_V1);
-
-    String parentCatalog = "parent_cat";
-    String foreignCatalog = "foreign_cat";
-    TFetchResultsResp response =
-        new TFetchResultsResp()
-            .setStatus(new TStatus().setStatusCode(TStatusCode.SUCCESS_STATUS))
-            .setResults(resultData)
-            .setResultSetMetadata(resultMetadataData);
-    when(resultData.getColumns()).thenReturn(null);
-    when(thriftAccessor.getThriftResponse(any(TGetCrossReferenceReq.class))).thenReturn(response);
-
-    client.listCrossReferences(
-        session, parentCatalog, TEST_SCHEMA, TEST_TABLE, foreignCatalog, TEST_SCHEMA, TEST_TABLE);
-
-    ArgumentCaptor<TGetCrossReferenceReq> captor =
-        ArgumentCaptor.forClass(TGetCrossReferenceReq.class);
-    verify(thriftAccessor).getThriftResponse(captor.capture());
-    assertEquals("parent\\_cat", captor.getValue().getParentCatalogName());
-    assertEquals("foreign\\_cat", captor.getValue().getForeignCatalogName());
-  }
 }
