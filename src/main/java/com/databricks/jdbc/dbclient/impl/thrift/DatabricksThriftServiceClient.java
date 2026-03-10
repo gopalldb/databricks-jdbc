@@ -163,7 +163,8 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
 
     DatabricksThreadContextHolder.setStatementType(statementType);
 
-    TExecuteStatementReq request = getRequest(sql, parameters, session, parentStatement, false);
+    TExecuteStatementReq request =
+        getRequest(sql, parameters, session, parentStatement, false, statementType);
 
     return thriftAccessor.execute(request, parentStatement, session, statementType);
   }
@@ -182,7 +183,8 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
             "public DatabricksResultSet executeStatementAsync(String sql = {%s}, Compute cluster = {%s}, Map<Integer, ImmutableSqlParameter> parameters = {%s})",
             sql, computeResource.toString(), parameters.toString()));
 
-    TExecuteStatementReq request = getRequest(sql, parameters, session, parentStatement, true);
+    TExecuteStatementReq request =
+        getRequest(sql, parameters, session, parentStatement, true, StatementType.SQL);
 
     return thriftAccessor.executeAsync(request, parentStatement, session, StatementType.SQL);
   }
@@ -205,7 +207,8 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
       Map<Integer, ImmutableSqlParameter> parameters,
       IDatabricksSession session,
       IDatabricksStatementInternal parentStatement,
-      boolean runAsync)
+      boolean runAsync,
+      StatementType statementType)
       throws SQLException {
     DatabricksThreadContextHolder.setSessionId(session.getSessionId());
     TSparkArrowTypes arrowNativeTypes = new TSparkArrowTypes().setTimestampAsArrow(true);
@@ -255,7 +258,9 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
       request.setResultRowLimit(maxRows);
     }
 
-    if (runAsync || !DriverUtil.isRunningAgainstFake()) {
+    if (statementType == StatementType.METADATA) {
+      request.setRunAsync(false);
+    } else if (runAsync || !DriverUtil.isRunningAgainstFake()) {
       request.setRunAsync(true);
     }
 
