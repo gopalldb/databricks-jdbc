@@ -172,6 +172,10 @@ public enum DatabricksJdbcUrlParams {
       "UseQueryForMetadata",
       "Use SQL SHOW commands instead of Thrift RPCs for metadata operations. When enabled, EnableShowCommandForGetFunctions is redundant",
       "0"),
+  METADATA_OPERATION_TIMEOUT(
+      "MetadataOperationTimeout",
+      "Timeout in seconds for metadata polling operations (e.g. GetTables, GetColumns). 0 means no timeout",
+      "300"),
   ENABLE_BATCHED_INSERTS("EnableBatchedInserts", "Enable batched INSERT optimization", "0"),
   ENABLE_SQL_VALIDATION_FOR_IS_VALID(
       "EnableSQLValidationForIsValid",
