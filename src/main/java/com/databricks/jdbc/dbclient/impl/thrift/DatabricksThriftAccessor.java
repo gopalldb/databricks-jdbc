@@ -738,6 +738,8 @@ final class DatabricksThriftAccessor {
         TimeUnit.MILLISECONDS.sleep(asyncPollIntervalMillis);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
+        LOGGER.error(
+            "Metadata operation interrupted for statement [{}], canceling operation", statementId);
         if (operationHandle != null) {
           cancelOperation(new TCancelOperationReq().setOperationHandle(operationHandle));
         }
