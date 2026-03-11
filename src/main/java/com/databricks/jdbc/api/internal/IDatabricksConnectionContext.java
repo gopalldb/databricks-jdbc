@@ -405,6 +405,10 @@ public interface IDatabricksConnectionContext {
 
   boolean enableShowCommandsForGetFunctions();
 
+  boolean useQueryForMetadata();
+
+  boolean treatMetadataCatalogNameAsPattern();
+
   /** Returns whether batched INSERT optimization is enabled */
   boolean isBatchedInsertsEnabled();
 

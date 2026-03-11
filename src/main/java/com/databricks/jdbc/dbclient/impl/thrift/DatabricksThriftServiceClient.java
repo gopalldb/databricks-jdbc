@@ -18,6 +18,7 @@ import com.databricks.jdbc.common.StatementType;
 import com.databricks.jdbc.common.util.DatabricksThreadContextHolder;
 import com.databricks.jdbc.common.util.DriverUtil;
 import com.databricks.jdbc.common.util.ProtocolFeatureUtil;
+import com.databricks.jdbc.common.util.WildcardUtil;
 import com.databricks.jdbc.dbclient.IDatabricksClient;
 import com.databricks.jdbc.dbclient.IDatabricksMetadataClient;
 import com.databricks.jdbc.dbclient.impl.common.MetadataResultSetBuilder;
@@ -162,7 +163,8 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
 
     DatabricksThreadContextHolder.setStatementType(statementType);
 
-    TExecuteStatementReq request = getRequest(sql, parameters, session, parentStatement, false);
+    TExecuteStatementReq request =
+        getRequest(sql, parameters, session, parentStatement, false, statementType);
 
     return thriftAccessor.execute(request, parentStatement, session, statementType);
   }
@@ -181,7 +183,8 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
             "public DatabricksResultSet executeStatementAsync(String sql = {%s}, Compute cluster = {%s}, Map<Integer, ImmutableSqlParameter> parameters = {%s})",
             sql, computeResource.toString(), parameters.toString()));
 
-    TExecuteStatementReq request = getRequest(sql, parameters, session, parentStatement, true);
+    TExecuteStatementReq request =
+        getRequest(sql, parameters, session, parentStatement, true, StatementType.SQL);
 
     return thriftAccessor.executeAsync(request, parentStatement, session, StatementType.SQL);
   }
@@ -204,7 +207,8 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
       Map<Integer, ImmutableSqlParameter> parameters,
       IDatabricksSession session,
       IDatabricksStatementInternal parentStatement,
-      boolean runAsync)
+      boolean runAsync,
+      StatementType statementType)
       throws SQLException {
     DatabricksThreadContextHolder.setSessionId(session.getSessionId());
     TSparkArrowTypes arrowNativeTypes = new TSparkArrowTypes().setTimestampAsArrow(true);
@@ -254,7 +258,9 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
       request.setResultRowLimit(maxRows);
     }
 
-    if (runAsync || !DriverUtil.isRunningAgainstFake()) {
+    if (statementType == StatementType.METADATA) {
+      request.setRunAsync(false);
+    } else if (runAsync || !DriverUtil.isRunningAgainstFake()) {
       request.setRunAsync(true);
     }
 
@@ -442,7 +448,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetSchemasReq request =
         new TGetSchemasReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setCatalogName(catalog);
+            .setCatalogName(maybeEscapeCatalogName(catalog));
     if (schemaNamePattern != null) {
       request.setSchemaName(schemaNamePattern);
     }
@@ -476,7 +482,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetTablesReq request =
         new TGetTablesReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setCatalogName(catalog)
+            .setCatalogName(maybeEscapeCatalogName(catalog))
             .setSchemaName(schemaNamePattern)
             .setTableName(tableNamePattern);
     if (tableTypes != null) {
@@ -521,7 +527,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetColumnsReq request =
         new TGetColumnsReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setCatalogName(catalog)
+            .setCatalogName(maybeEscapeCatalogName(catalog))
             .setSchemaName(schemaNamePattern)
             .setTableName(tableNamePattern)
             .setColumnName(columnNamePattern);
@@ -585,7 +591,7 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     TGetFunctionsReq request =
         new TGetFunctionsReq()
             .setSessionHandle(Objects.requireNonNull(session.getSessionInfo()).sessionHandle())
-            .setCatalogName(catalog)
+            .setCatalogName(maybeEscapeCatalogName(catalog))
             .setSchemaName(schemaNamePattern)
             .setFunctionName(functionNamePattern);
     if (ProtocolFeatureUtil.supportsAsyncMetadataExecution(serverProtocolVersion)) {
@@ -733,6 +739,13 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
   @Override
   public DatabricksConfig getDatabricksConfig() {
     return thriftAccessor.getDatabricksConfig();
+  }
+
+  private String maybeEscapeCatalogName(String catalogName) {
+    if (!connectionContext.treatMetadataCatalogNameAsPattern()) {
+      return WildcardUtil.escapeCatalogName(catalogName);
+    }
+    return catalogName;
   }
 
   private TNamespace getNamespace(String catalog, String schema) {
