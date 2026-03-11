@@ -1104,6 +1104,11 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
   }
 
   @Override
+  public boolean treatMetadataCatalogNameAsPattern() {
+    return getParameter(DatabricksJdbcUrlParams.TREAT_METADATA_CATALOG_NAME_AS_PATTERN).equals("1");
+  }
+
+  @Override
   public int getMetadataOperationTimeout() {
     try {
       return Integer.parseInt(getParameter(DatabricksJdbcUrlParams.METADATA_OPERATION_TIMEOUT));
