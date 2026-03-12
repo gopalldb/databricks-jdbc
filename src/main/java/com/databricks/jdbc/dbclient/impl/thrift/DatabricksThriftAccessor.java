@@ -726,7 +726,7 @@ final class DatabricksThriftAccessor {
                 LOGGER.warn("Failed to cancel metadata operation on timeout: {}", e.getMessage());
               }
             },
-            DatabricksDriverErrorCode.METADATA_OPERATION_TIMEOUT);
+            DatabricksDriverErrorCode.OPERATION_TIMEOUT_ERROR);
     while (shouldContinuePolling(statusResp)) {
       metadataTimeoutHandler.checkTimeout();
       statusResp = getThriftClient().GetOperationStatus(statusReq);
