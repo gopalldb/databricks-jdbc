@@ -5,7 +5,6 @@ import com.databricks.jdbc.dbclient.IDatabricksHttpClient;
 import com.databricks.jdbc.exception.DatabricksSQLException;
 import com.databricks.jdbc.log.JdbcLogger;
 import com.databricks.jdbc.log.JdbcLoggerFactory;
-import com.databricks.jdbc.model.core.ExternalLink;
 import com.databricks.jdbc.model.telemetry.enums.DatabricksDriverErrorCode;
 import java.io.IOException;
 import java.sql.SQLException;
@@ -51,12 +50,12 @@ public class StreamingChunkDownloadTask implements Callable<Void> {
     try {
       while (!downloadSuccessful) {
         try {
-          // Check if link is expired and refresh if needed
+          // Check if link is expired and refresh if needed.
+          // The LinkRefresher (StreamingChunkProvider.getRefreshedLink) updates the chunk's
+          // link directly under the refetchLock, so we don't need to set it here.
           if (chunk.isChunkLinkInvalid()) {
             LOGGER.debug("Link invalid for chunk {}, refetching", chunk.getChunkIndex());
-            ExternalLink freshLink =
-                linkRefresher.refreshLink(chunk.getChunkIndex(), chunk.getStartRowOffset());
-            chunk.setChunkLink(freshLink);
+            linkRefresher.refreshLink(chunk.getChunkIndex(), chunk.getStartRowOffset());
           }
 
           // Perform the download

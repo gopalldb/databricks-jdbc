@@ -590,7 +590,11 @@ public class StreamingChunkProvider implements ChunkProvider {
       // Fallback: batch response did not include the requested chunk
       LOGGER.warn(
           "Batch refresh did not include chunk {}, falling back to single refetch", chunkIndex);
-      return linkFetcher.refetchLink(chunkIndex, rowOffset);
+      ExternalLink fallbackLink = linkFetcher.refetchLink(chunkIndex, rowOffset);
+      if (targetChunk != null) {
+        targetChunk.setChunkLink(fallbackLink);
+      }
+      return fallbackLink;
     }
   }
 

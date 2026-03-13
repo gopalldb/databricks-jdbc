@@ -145,9 +145,8 @@ public class StreamingChunkDownloadTaskTest {
 
     downloadTask.call();
 
-    // Verify link was refreshed
+    // Verify link was refreshed (setChunkLink is done inside getRefreshedLink, not here)
     verify(linkRefresher, times(1)).refreshLink(5L, 100L);
-    verify(chunk, times(1)).setChunkLink(freshLink);
     verify(chunk, times(1))
         .downloadData(httpClient, CompressionCodec.NONE, CLOUD_FETCH_SPEED_THRESHOLD);
     assertTrue(downloadFuture.isDone());
@@ -172,9 +171,8 @@ public class StreamingChunkDownloadTaskTest {
 
     downloadTask.call();
 
-    // Should refresh link twice (once per attempt)
+    // Should refresh link twice (once per attempt; setChunkLink done inside getRefreshedLink)
     verify(linkRefresher, times(2)).refreshLink(5L, 100L);
-    verify(chunk, times(2)).setChunkLink(freshLink);
     verify(chunk, times(2))
         .downloadData(httpClient, CompressionCodec.NONE, CLOUD_FETCH_SPEED_THRESHOLD);
     verify(chunk, times(1)).setStatus(ChunkStatus.DOWNLOAD_RETRY);
