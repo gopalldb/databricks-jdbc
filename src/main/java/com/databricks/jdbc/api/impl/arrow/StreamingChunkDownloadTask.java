@@ -12,8 +12,9 @@ import java.sql.SQLException;
 import java.util.concurrent.Callable;
 
 /**
- * A download task for streaming chunk provider. Simpler than ChunkDownloadTask - uses
- * ChunkLinkFetcher directly for link refresh instead of ChunkLinkDownloadService.
+ * A download task for streaming chunk provider. Uses a {@link LinkRefresher} callback for link
+ * refresh, which enables the {@link StreamingChunkProvider} to coalesce concurrent expired-link
+ * refreshes into a single batch RPC.
  */
 public class StreamingChunkDownloadTask implements Callable<Void> {
 
@@ -26,19 +27,19 @@ public class StreamingChunkDownloadTask implements Callable<Void> {
   private final ArrowResultChunk chunk;
   private final IDatabricksHttpClient httpClient;
   private final CompressionCodec compressionCodec;
-  private final ChunkLinkFetcher linkFetcher;
+  private final LinkRefresher linkRefresher;
   private final double cloudFetchSpeedThreshold;
 
   public StreamingChunkDownloadTask(
       ArrowResultChunk chunk,
       IDatabricksHttpClient httpClient,
       CompressionCodec compressionCodec,
-      ChunkLinkFetcher linkFetcher,
+      LinkRefresher linkRefresher,
       double cloudFetchSpeedThreshold) {
     this.chunk = chunk;
     this.httpClient = httpClient;
     this.compressionCodec = compressionCodec;
-    this.linkFetcher = linkFetcher;
+    this.linkRefresher = linkRefresher;
     this.cloudFetchSpeedThreshold = cloudFetchSpeedThreshold;
   }
 
@@ -54,7 +55,7 @@ public class StreamingChunkDownloadTask implements Callable<Void> {
           if (chunk.isChunkLinkInvalid()) {
             LOGGER.debug("Link invalid for chunk {}, refetching", chunk.getChunkIndex());
             ExternalLink freshLink =
-                linkFetcher.refetchLink(chunk.getChunkIndex(), chunk.getStartRowOffset());
+                linkRefresher.refreshLink(chunk.getChunkIndex(), chunk.getStartRowOffset());
             chunk.setChunkLink(freshLink);
           }
 

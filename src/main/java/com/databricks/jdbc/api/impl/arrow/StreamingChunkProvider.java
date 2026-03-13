@@ -99,6 +99,11 @@ public class StreamingChunkProvider implements ChunkProvider {
   // that must be consistent within the loop.
   private final ReentrantLock downloadLock = new ReentrantLock();
 
+  // Synchronization for coalescing concurrent expired-link refreshes.
+  // When multiple download threads detect expired links simultaneously, only one thread
+  // performs the actual batch FetchResults RPC while others wait and reuse the result.
+  private final Object refetchLock = new Object();
+
   // Executors
   private final ExecutorService downloadExecutor;
   private final Thread linkPrefetchThread;
@@ -511,12 +516,90 @@ public class StreamingChunkProvider implements ChunkProvider {
     }
   }
 
+  /**
+   * Coalesces concurrent expired-link refresh requests into a single batch RPC.
+   *
+   * <p>When multiple download threads detect expired links simultaneously, the first thread to
+   * acquire the lock performs a single {@link ChunkLinkFetcher#fetchLinks} call from the lowest
+   * expired chunk offset. The response refreshes all expired in-memory chunks. Subsequent threads
+   * find their chunks already refreshed via the double-check pattern.
+   *
+   * <p>If the batch response does not include the requested chunk, falls back to a single {@link
+   * ChunkLinkFetcher#refetchLink} call.
+   *
+   * @param chunkIndex The chunk index whose link has expired
+   * @param rowOffset The row offset of the chunk (used by Thrift)
+   * @return The refreshed ExternalLink
+   * @throws SQLException if the refresh fails
+   */
+  ExternalLink getRefreshedLink(long chunkIndex, long rowOffset) throws SQLException {
+    synchronized (refetchLock) {
+      // Double-check: another thread may have already refreshed while we waited on the lock
+      ArrowResultChunk targetChunk = chunks.get(chunkIndex);
+      if (targetChunk != null && !targetChunk.isChunkLinkInvalid()) {
+        return targetChunk.getChunkLink();
+      }
+
+      // Find the minimum expired chunk index among all in-memory chunks
+      long minExpiredIndex = Long.MAX_VALUE;
+      long minExpiredRowOffset = 0;
+      int expiredCount = 0;
+      for (ArrowResultChunk c : chunks.values()) {
+        if (c.isChunkLinkInvalid()) {
+          expiredCount++;
+          if (c.getChunkIndex() < minExpiredIndex) {
+            minExpiredIndex = c.getChunkIndex();
+            minExpiredRowOffset = c.getStartRowOffset();
+          }
+        }
+      }
+
+      if (minExpiredIndex == Long.MAX_VALUE) {
+        // No expired chunks found — race condition resolved by another thread
+        if (targetChunk != null) {
+          return targetChunk.getChunkLink();
+        }
+        throw new DatabricksSQLException(
+            "Chunk " + chunkIndex + " not found during link refresh",
+            DatabricksDriverErrorCode.CHUNK_READY_ERROR);
+      }
+
+      LOGGER.info(
+          "Coalesced link refresh: fetching from chunk {} (row offset {}) for {} expired chunks",
+          minExpiredIndex,
+          minExpiredRowOffset,
+          expiredCount);
+
+      // Single batch FetchResults RPC from the lowest expired offset
+      ChunkLinkFetchResult result = linkFetcher.fetchLinks(minExpiredIndex, minExpiredRowOffset);
+
+      // Update ALL chunks that received fresh links
+      for (ExternalLink link : result.getChunkLinks()) {
+        ArrowResultChunk c = chunks.get(link.getChunkIndex());
+        if (c != null && c.isChunkLinkInvalid()) {
+          c.setChunkLink(link);
+        }
+      }
+
+      // Check if our target chunk was refreshed by the batch
+      targetChunk = chunks.get(chunkIndex);
+      if (targetChunk != null && !targetChunk.isChunkLinkInvalid()) {
+        return targetChunk.getChunkLink();
+      }
+
+      // Fallback: batch response did not include the requested chunk
+      LOGGER.warn(
+          "Batch refresh did not include chunk {}, falling back to single refetch", chunkIndex);
+      return linkFetcher.refetchLink(chunkIndex, rowOffset);
+    }
+  }
+
   private void submitDownloadTask(ArrowResultChunk chunk) {
     LOGGER.debug("Submitting download task for chunk {}", chunk.getChunkIndex());
 
     StreamingChunkDownloadTask task =
         new StreamingChunkDownloadTask(
-            chunk, httpClient, compressionCodec, linkFetcher, cloudFetchSpeedThreshold);
+            chunk, httpClient, compressionCodec, this::getRefreshedLink, cloudFetchSpeedThreshold);
 
     downloadExecutor.submit(task);
   }
