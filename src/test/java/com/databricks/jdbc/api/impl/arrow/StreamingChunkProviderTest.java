@@ -1603,5 +1603,71 @@ class StreamingChunkProviderTest {
       assertFalse(provider.hasNextChunk());
       assertEquals(6, provider.getChunkCount());
     }
+
+    @Test
+    @DisplayName("Concurrent threads should coalesce into a single fetchLinks RPC")
+    void testConcurrentRefreshCoalescesIntoSingleRpc() throws Exception {
+      // Setup: All 3 initial links are expired
+      long rowsPerChunk = 100L;
+      ChunkLinkFetchResult initialLinks =
+          createLinkBatch(0, 3, rowsPerChunk, false, Set.of(0, 1, 2));
+
+      // Fresh links returned by the single coalesced batch call
+      ExternalLink freshLink0 = createExternalLink(0, rowsPerChunk, 1L, FAR_FUTURE_EXPIRATION);
+      ExternalLink freshLink1 = createExternalLink(1, rowsPerChunk, 2L, FAR_FUTURE_EXPIRATION);
+      ExternalLink freshLink2 = createExternalLink(2, rowsPerChunk, null, FAR_FUTURE_EXPIRATION);
+
+      // Add a delay to the fetchLinks mock so multiple threads pile up on the lock
+      ChunkLinkFetchResult refetchBatch =
+          ChunkLinkFetchResult.of(List.of(freshLink0, freshLink1, freshLink2), false, -1, 300L);
+      AtomicInteger fetchLinksCallCount = new AtomicInteger(0);
+      when(mockLinkFetcher.fetchLinks(eq(0L), eq(0L)))
+          .thenAnswer(
+              invocation -> {
+                fetchLinksCallCount.incrementAndGet();
+                TimeUnit.MILLISECONDS.sleep(100); // Simulate slow RPC
+                return refetchBatch;
+              });
+
+      setupHttpClientWithTracking(3, 30);
+
+      provider = createProvider(initialLinks, LINK_PREFETCH_WINDOW, MAX_CHUNKS_IN_MEMORY);
+
+      // Use a latch to ensure all threads start calling getRefreshedLink at the same time
+      int threadCount = 3;
+      CountDownLatch startLatch = new CountDownLatch(1);
+      CountDownLatch doneLatch = new CountDownLatch(threadCount);
+      List<Exception> errors = Collections.synchronizedList(new ArrayList<>());
+
+      for (int i = 0; i < threadCount; i++) {
+        final long chunkIndex = i;
+        final long rowOffset = i * rowsPerChunk;
+        new Thread(
+                () -> {
+                  try {
+                    startLatch.await(); // Wait for all threads to be ready
+                    provider.getRefreshedLink(chunkIndex, rowOffset);
+                  } catch (Exception e) {
+                    errors.add(e);
+                  } finally {
+                    doneLatch.countDown();
+                  }
+                })
+            .start();
+      }
+
+      // Release all threads simultaneously
+      startLatch.countDown();
+      assertTrue(doneLatch.await(10, TimeUnit.SECONDS), "All threads should complete");
+      assertTrue(errors.isEmpty(), "No errors expected, got: " + errors);
+
+      // The critical assertion: only 1 fetchLinks call despite 3 concurrent threads.
+      // The first thread performs the RPC; the other 2 find their chunks already
+      // refreshed via the double-check pattern.
+      assertEquals(
+          1,
+          fetchLinksCallCount.get(),
+          "Only one fetchLinks RPC should be made despite 3 concurrent refresh requests");
+    }
   }
 }
