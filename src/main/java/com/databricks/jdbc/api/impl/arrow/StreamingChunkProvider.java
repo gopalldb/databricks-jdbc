@@ -540,11 +540,21 @@ public class StreamingChunkProvider implements ChunkProvider {
         return targetChunk.getChunkLink();
       }
 
-      // Find the minimum expired chunk index among all in-memory chunks
+      // Find the minimum expired chunk index among pre-download chunks.
+      // Only called from StreamingChunkDownloadTask before download starts, so the
+      // target chunk is always pre-download. We also skip chunks that have already been
+      // downloaded (DOWNLOAD_IN_PROGRESS or later) since their links are no longer needed.
       long minExpiredIndex = Long.MAX_VALUE;
       long minExpiredRowOffset = 0;
       int expiredCount = 0;
       for (ArrowResultChunk c : chunks.values()) {
+        ChunkStatus status = c.getStatus();
+        if (status != ChunkStatus.PENDING
+            && status != ChunkStatus.URL_FETCHED
+            && status != ChunkStatus.DOWNLOAD_FAILED
+            && status != ChunkStatus.DOWNLOAD_RETRY) {
+          continue; // Already downloading or downloaded — link refresh not needed
+        }
         if (c.isChunkLinkInvalid()) {
           expiredCount++;
           if (c.getChunkIndex() < minExpiredIndex) {
@@ -573,11 +583,19 @@ public class StreamingChunkProvider implements ChunkProvider {
       // Single batch FetchResults RPC from the lowest expired offset
       ChunkLinkFetchResult result = linkFetcher.fetchLinks(minExpiredIndex, minExpiredRowOffset);
 
-      // Update ALL chunks that received fresh links
+      // Update ALL pre-download chunks that received fresh links.
+      // Always overwrite even if the current link hasn't expired yet, since the
+      // server-provided link has a later expiry and prevents near-expiry races.
       for (ExternalLink link : result.getChunkLinks()) {
         ArrowResultChunk c = chunks.get(link.getChunkIndex());
-        if (c != null && c.isChunkLinkInvalid()) {
-          c.setChunkLink(link);
+        if (c != null) {
+          ChunkStatus status = c.getStatus();
+          if (status == ChunkStatus.PENDING
+              || status == ChunkStatus.URL_FETCHED
+              || status == ChunkStatus.DOWNLOAD_FAILED
+              || status == ChunkStatus.DOWNLOAD_RETRY) {
+            c.setChunkLink(link);
+          }
         }
       }
 
