@@ -263,7 +263,7 @@ class DatabricksTypeUtilTest {
   @ParameterizedTest
   @CsvSource({
     "STRING, STRING",
-    "DATE, TIMESTAMP",
+    "DATE, DATE",
     "TIMESTAMP, TIMESTAMP",
     "TIMESTAMP_NTZ, TIMESTAMP",
     "SHORT, SHORT",
@@ -271,20 +271,30 @@ class DatabricksTypeUtilTest {
     "TINYINT, TINYINT",
     "BYTE, BYTE",
     "INT, INT",
+    "INTEGER, INT",
     "BIGINT, LONG",
     "LONG, LONG",
     "FLOAT, FLOAT",
+    "REAL, FLOAT",
     "DOUBLE, DOUBLE",
     "BINARY, BINARY",
     "BOOLEAN, BOOLEAN",
     "DECIMAL, DECIMAL",
+    "NUMERIC, DECIMAL",
+    "DEC, DECIMAL",
     "STRUCT, STRUCT",
     "ARRAY, ARRAY",
     "VOID, NULL",
     "NULL, NULL",
     "MAP, MAP",
     "CHAR, STRING",
+    "VARCHAR, STRING",
+    "NVARCHAR, STRING",
+    "NCHAR, STRING",
     "INTERVAL, INTERVAL",
+    "VARIANT, STRING",
+    "GEOMETRY, GEOMETRY",
+    "GEOGRAPHY, GEOGRAPHY",
     "UNKNOWN, USER_DEFINED_TYPE"
   })
   public void testGetColumnInfoType(String inputTypeName, String expectedTypeName) {
@@ -294,6 +304,46 @@ class DatabricksTypeUtilTest {
         String.format(
             "inputType : %s, output should have been %s.  But was %s",
             inputTypeName, expectedTypeName, DatabricksTypeUtil.getColumnInfoType(inputTypeName)));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "INTERVAL DAY TO SECOND, INTERVAL",
+    "INTERVAL YEAR TO MONTH, INTERVAL",
+    "INTERVAL DAY TO HOUR, INTERVAL",
+    "INTERVAL DAY TO MINUTE, INTERVAL",
+    "INTERVAL HOUR TO MINUTE, INTERVAL",
+    "INTERVAL HOUR TO SECOND, INTERVAL",
+    "INTERVAL MINUTE TO SECOND, INTERVAL"
+  })
+  public void testGetColumnInfoTypeIntervalSubTypes(String inputTypeName, String expectedTypeName) {
+    assertEquals(
+        ColumnInfoTypeName.valueOf(expectedTypeName),
+        DatabricksTypeUtil.getColumnInfoType(inputTypeName),
+        String.format(
+            "inputType : %s, output should have been %s.  But was %s",
+            inputTypeName, expectedTypeName, DatabricksTypeUtil.getColumnInfoType(inputTypeName)));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "VARIANT, STRING, " + Types.VARCHAR,
+    "TIMESTAMP, TIMESTAMP, " + Types.TIMESTAMP,
+    "TIMESTAMP_NTZ, TIMESTAMP, " + Types.TIMESTAMP,
+    "GEOGRAPHY, GEOGRAPHY, " + Types.OTHER,
+    "GEOMETRY, GEOMETRY, " + Types.OTHER,
+  })
+  public void testGetColumnInfoTypeToJdbcType(
+      String inputTypeName, String expectedEnumName, int expectedJdbcType) {
+    ColumnInfoTypeName typeName = DatabricksTypeUtil.getColumnInfoType(inputTypeName);
+    assertEquals(
+        ColumnInfoTypeName.valueOf(expectedEnumName),
+        typeName,
+        "Enum mapping mismatch for " + inputTypeName);
+    assertEquals(
+        expectedJdbcType,
+        DatabricksTypeUtil.getColumnType(typeName),
+        "JDBC type code mismatch for " + inputTypeName);
   }
 
   @Test
