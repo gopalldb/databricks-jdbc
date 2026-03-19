@@ -1,6 +1,7 @@
 package com.databricks.jdbc.dbclient.impl.sqlexec;
 
 import static com.databricks.jdbc.common.DatabricksJdbcConstants.JSON_HTTP_HEADERS;
+import static com.databricks.jdbc.common.DatabricksJdbcConstants.OPERATION_CANCELLED_SQLSTATE;
 import static com.databricks.jdbc.common.DatabricksJdbcConstants.QUERY_EXECUTION_TIMEOUT_SQLSTATE;
 import static com.databricks.jdbc.common.DatabricksJdbcConstants.TEMPORARY_REDIRECT_STATUS_CODE;
 import static com.databricks.jdbc.common.EnvironmentVariables.DEFAULT_RESULT_ROW_LIMIT;
@@ -692,6 +693,17 @@ public class DatabricksSdkClient implements IDatabricksClient {
       ExecuteStatementResponse response, String statementId, String statement) throws SQLException {
     StatementState statementState = response.getStatus().getState();
     ServiceError error = response.getStatus().getError();
+
+    // Distinguish cancellation from failure
+    if (statementState == StatementState.CANCELED) {
+      String cancelMessage = String.format("Statement [%s] was cancelled", statementId);
+      LOGGER.info(cancelMessage);
+      throw new DatabricksSQLException(
+          cancelMessage,
+          OPERATION_CANCELLED_SQLSTATE,
+          DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED);
+    }
+
     String errorMessage =
         String.format(
             "Statement execution failed %s -> %s\n%s.", statementId, statement, statementState);

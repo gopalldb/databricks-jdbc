@@ -1,5 +1,6 @@
 package com.databricks.jdbc.dbclient.impl.thrift;
 
+import static com.databricks.jdbc.common.DatabricksJdbcConstants.OPERATION_CANCELLED_SQLSTATE;
 import static com.databricks.jdbc.common.DatabricksJdbcConstants.QUERY_EXECUTION_TIMEOUT_SQLSTATE;
 import static com.databricks.jdbc.common.EnvironmentVariables.*;
 import static com.databricks.jdbc.common.util.DatabricksThriftUtil.*;
@@ -807,6 +808,16 @@ final class DatabricksThriftAccessor {
       LOGGER.error(errorMsg);
       throw new DatabricksSQLException(
           errorMsg, statusResp.isSetSqlState() ? statusResp.getSqlState() : null);
+    }
+
+    if (statusResp.isSetOperationState()
+        && statusResp.getOperationState() == TOperationState.CANCELED_STATE) {
+      String errorMsg = String.format("Statement [%s] was cancelled", statementId);
+      LOGGER.info(errorMsg);
+      throw new DatabricksSQLException(
+          errorMsg,
+          OPERATION_CANCELLED_SQLSTATE,
+          DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED);
     }
 
     if (statusResp.isSetOperationState() && isErrorOperationState(statusResp.getOperationState())) {
