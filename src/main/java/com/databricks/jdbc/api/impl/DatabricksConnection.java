@@ -415,13 +415,6 @@ public class DatabricksConnection implements IDatabricksConnection, IDatabricksC
   public void close() throws SQLException {
     LOGGER.debug("public void close()");
     for (IDatabricksStatementInternal statement : statementSet) {
-      // Best-effort cancel of in-flight statements before closing, so that running queries
-      // receive a clear cancellation signal rather than ambiguous connection errors.
-      try {
-        statement.getStatement().cancel();
-      } catch (SQLException e) {
-        LOGGER.debug("Best-effort cancel during connection close failed: {}", e.getMessage());
-      }
       statement.close(false);
       statementSet.remove(statement);
     }

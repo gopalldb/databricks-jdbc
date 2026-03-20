@@ -404,6 +404,15 @@ final class DatabricksThriftAccessor {
     try {
       response = getOperationStatus(request, statementId);
       TOperationState operationState = response.getOperationState();
+      if (operationState == TOperationState.CANCELED_STATE) {
+        String errorMsg =
+            String.format("Statement [%s] was cancelled", statementId.toSQLExecStatementId());
+        LOGGER.info(errorMsg);
+        throw new DatabricksSQLException(
+            errorMsg,
+            OPERATION_CANCELLED_SQLSTATE,
+            DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED);
+      }
       if (operationState == TOperationState.FINISHED_STATE) {
         verifySuccessStatus(
             response.getStatus(), "getStatementResult", statementId.toSQLExecStatementId());
