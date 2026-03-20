@@ -405,13 +405,7 @@ final class DatabricksThriftAccessor {
       response = getOperationStatus(request, statementId);
       TOperationState operationState = response.getOperationState();
       if (operationState == TOperationState.CANCELED_STATE) {
-        String errorMsg =
-            String.format("Statement [%s] was cancelled", statementId.toSQLExecStatementId());
-        LOGGER.info(errorMsg);
-        throw new DatabricksSQLException(
-            errorMsg,
-            OPERATION_CANCELLED_SQLSTATE,
-            DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED);
+        throw cancelledStatementException(statementId.toSQLExecStatementId());
       }
       if (operationState == TOperationState.FINISHED_STATE) {
         verifySuccessStatus(
@@ -821,12 +815,7 @@ final class DatabricksThriftAccessor {
 
     if (statusResp.isSetOperationState()
         && statusResp.getOperationState() == TOperationState.CANCELED_STATE) {
-      String errorMsg = String.format("Statement [%s] was cancelled", statementId);
-      LOGGER.info(errorMsg);
-      throw new DatabricksSQLException(
-          errorMsg,
-          OPERATION_CANCELLED_SQLSTATE,
-          DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED);
+      throw cancelledStatementException(statementId);
     }
 
     if (statusResp.isSetOperationState() && isErrorOperationState(statusResp.getOperationState())) {
@@ -862,6 +851,13 @@ final class DatabricksThriftAccessor {
     TSparkDirectResults directResults =
         (TSparkDirectResults) response.getFieldValue(directResultsField);
     return directResults.isSetResultSet() && directResults.isSetResultSetMetadata();
+  }
+
+  private DatabricksSQLException cancelledStatementException(String statementId) {
+    String msg = String.format("Statement [%s] was cancelled", statementId);
+    LOGGER.info(msg);
+    return new DatabricksSQLException(
+        msg, OPERATION_CANCELLED_SQLSTATE, DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED);
   }
 
   private boolean isErrorStatusCode(TStatus status) {
