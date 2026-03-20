@@ -295,7 +295,11 @@ class DatabricksTypeUtilTest {
     "VARIANT, STRING",
     "GEOMETRY, GEOMETRY",
     "GEOGRAPHY, GEOGRAPHY",
-    "UNKNOWN, USER_DEFINED_TYPE"
+    "UNKNOWN, USER_DEFINED_TYPE",
+    // Lowercase inputs fall through to USER_DEFINED_TYPE (getColumnInfoType expects uppercase)
+    "string, USER_DEFINED_TYPE",
+    "int, USER_DEFINED_TYPE",
+    "varchar, USER_DEFINED_TYPE"
   })
   public void testGetColumnInfoType(String inputTypeName, String expectedTypeName) {
     assertEquals(
