@@ -167,6 +167,18 @@ class ChunkLinkDownloadServiceTest {
     when(mockChunk.getStatus()).thenReturn(ChunkStatus.PENDING);
     when(mockChunkMap.get(chunkIndex)).thenReturn(mockChunk);
 
+    // Mock chunks and empty results for subsequent indices so batch continuation
+    // doesn't fail when looking up row offsets or fetching the next batch.
+    // Use lenient() since these may or may not be reached depending on timing.
+    for (long i = 2; i < TOTAL_CHUNKS; i++) {
+      ArrowResultChunk subsequentChunk = mock(ArrowResultChunk.class);
+      lenient().when(subsequentChunk.getStartRowOffset()).thenReturn(i * 100L);
+      lenient().when(mockChunkMap.get(i)).thenReturn(subsequentChunk);
+    }
+    lenient()
+        .when(mockClient.getResultChunks(eq(mockStatementId), eq(2L), anyLong()))
+        .thenReturn(buildChunkLinkFetchResult(Collections.emptyList()));
+
     ChunkLinkDownloadService<ArrowResultChunk> service =
         new ChunkLinkDownloadService<>(
             mockSession, mockStatementId, TOTAL_CHUNKS, mockChunkMap, NEXT_BATCH_START_INDEX);
