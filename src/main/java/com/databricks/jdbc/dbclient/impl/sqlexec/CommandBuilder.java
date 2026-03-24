@@ -29,7 +29,9 @@ public class CommandBuilder {
 
   public CommandBuilder(String catalogName, IDatabricksSession session) {
     this.sessionContext = session.toString();
-    this.catalogName = catalogName;
+    // Catalog names go into backtick-quoted SQL identifiers (not LIKE patterns),
+    // so strip JDBC escape sequences: \_  ->  _  and  \\  ->  \
+    this.catalogName = WildcardUtil.stripJdbcEscapes(catalogName);
   }
 
   public CommandBuilder(IDatabricksSession session) {
