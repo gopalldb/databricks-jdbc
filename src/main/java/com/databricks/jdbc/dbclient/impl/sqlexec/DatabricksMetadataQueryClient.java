@@ -22,7 +22,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -123,10 +122,11 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
       String tableNamePattern,
       String[] tableTypes)
       throws SQLException {
-    String[] validatedTableTypes =
-        Optional.ofNullable(tableTypes)
-            .filter(types -> types.length > 0)
-            .orElse(DEFAULT_TABLE_TYPES);
+    // Per JDBC spec: null types = return all types; empty array = return nothing
+    if (tableTypes != null && tableTypes.length == 0) {
+      return metadataResultSetBuilder.getTablesResult(catalog, tableTypes, new ArrayList<>());
+    }
+    String[] validatedTableTypes = tableTypes != null ? tableTypes : DEFAULT_TABLE_TYPES;
 
     // Only fetch currentCatalog if multiple catalog support is disabled
     String currentCatalog = isMultipleCatalogSupportDisabled() ? session.getCurrentCatalog() : null;
