@@ -313,8 +313,16 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
         new CommandBuilder(catalog, session).setSchema(schema).setTable(table);
     String SQL = commandBuilder.getSQLString(CommandName.LIST_PRIMARY_KEYS);
     LOGGER.debug("SQL command to fetch primary keys: {}", SQL);
-    return metadataResultSetBuilder.getPrimaryKeysResult(
-        getResultSet(SQL, session, MetadataOperationType.GET_PRIMARY_KEYS));
+    try {
+      return metadataResultSetBuilder.getPrimaryKeysResult(
+          getResultSet(SQL, session, MetadataOperationType.GET_PRIMARY_KEYS));
+    } catch (SQLException e) {
+      if (isObjectNotFoundException(e)) {
+        LOGGER.debug("Object not found for getPrimaryKeys, returning empty result");
+        return metadataResultSetBuilder.getPrimaryKeysResult(new ArrayList<>());
+      }
+      throw e;
+    }
   }
 
   @Override
@@ -351,10 +359,9 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
       return metadataResultSetBuilder.getImportedKeysResult(
           getResultSet(SQL, session, MetadataOperationType.GET_CROSS_REFERENCE));
     } catch (SQLException e) {
-      if (PARSE_SYNTAX_ERROR_SQL_STATE.equals(e.getSQLState())) {
-        // This is a workaround for the issue where the SQL command fails with "syntax error at or
-        // near "foreign""
-        LOGGER.debug("SQL command failed with syntax error. Returning empty result set.");
+      if (PARSE_SYNTAX_ERROR_SQL_STATE.equals(e.getSQLState()) || isObjectNotFoundException(e)) {
+        LOGGER.debug(
+            "SQL error for getImportedKeys ({}), returning empty result set.", e.getSQLState());
         return metadataResultSetBuilder.getImportedKeys(new ArrayList<>());
       } else {
         throw e;
@@ -409,11 +416,9 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
           parentSchema,
           parentTable);
     } catch (SQLException e) {
-      if (PARSE_SYNTAX_ERROR_SQL_STATE.equals(e.getSQLState())) {
-        // This is a workaround for the issue where the SQL command fails with "syntax error at or
-        // near "foreign""
-        // This is a known issue in Databricks for older DBSQL versions
-        LOGGER.debug("SQL command failed with syntax error. Returning empty result set.");
+      if (PARSE_SYNTAX_ERROR_SQL_STATE.equals(e.getSQLState()) || isObjectNotFoundException(e)) {
+        LOGGER.debug(
+            "SQL error for getCrossReference ({}), returning empty result set.", e.getSQLState());
         return metadataResultSetBuilder.getCrossRefsResult(new ArrayList<>());
       } else {
         LOGGER.error(
