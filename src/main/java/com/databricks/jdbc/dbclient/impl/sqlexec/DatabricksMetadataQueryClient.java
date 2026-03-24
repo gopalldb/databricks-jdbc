@@ -9,7 +9,6 @@ import com.databricks.jdbc.api.internal.IDatabricksSession;
 import com.databricks.jdbc.common.MetadataOperationType;
 import com.databricks.jdbc.common.StatementType;
 import com.databricks.jdbc.common.util.JdbcThreadUtils;
-import com.databricks.jdbc.common.util.WildcardUtil;
 import com.databricks.jdbc.dbclient.IDatabricksClient;
 import com.databricks.jdbc.dbclient.IDatabricksMetadataClient;
 import com.databricks.jdbc.dbclient.impl.common.CommandConstants;
@@ -104,8 +103,7 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
       return metadataResultSetBuilder.getSchemasResult(
           getResultSet(SQL, session, MetadataOperationType.GET_SCHEMAS), catalog);
     } catch (SQLException e) {
-      if (WildcardUtil.isNullOrWildcard(catalog)
-          && PARSE_SYNTAX_ERROR_SQL_STATE.equals(e.getSQLState())) {
+      if (catalog == null && PARSE_SYNTAX_ERROR_SQL_STATE.equals(e.getSQLState())) {
         // This is a fallback for the case where the SQL command fails with "syntax error at or near
         // "ALL CATALOGS""
         // This is a known issue for older DBR versions
@@ -149,8 +147,7 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
       return metadataResultSetBuilder.getTablesResult(
           getResultSet(SQL, session, MetadataOperationType.GET_TABLES), validatedTableTypes);
     } catch (SQLException e) {
-      if (PARSE_SYNTAX_ERROR_SQL_STATE.equals(e.getSQLState())
-          && (catalog == null || catalog.equals("*") || catalog.equals("%"))) {
+      if (PARSE_SYNTAX_ERROR_SQL_STATE.equals(e.getSQLState()) && catalog == null) {
         // Gracefully handles the case where an older DBSQL version doesn't support all catalogs in
         // the SHOW TABLES command.
         LOGGER.debug("SQL command failed with syntax error. Returning empty result set.");
