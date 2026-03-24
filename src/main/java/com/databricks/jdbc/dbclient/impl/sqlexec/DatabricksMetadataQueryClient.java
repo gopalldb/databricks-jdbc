@@ -108,6 +108,9 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
         // This is a known issue for older DBR versions
         LOGGER.debug("SQL command failed with syntax error. Fetching schemas across all catalogs.");
         return fetchSchemasAcrossCatalogs(session, schemaNamePattern);
+      } else if (isObjectNotFoundException(e)) {
+        LOGGER.debug("Object not found for getSchemas, returning empty result set.");
+        return metadataResultSetBuilder.getSchemasResult(new ArrayList<>());
       } else {
         throw e;
       }
@@ -147,10 +150,9 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
       return metadataResultSetBuilder.getTablesResult(
           getResultSet(SQL, session, MetadataOperationType.GET_TABLES), validatedTableTypes);
     } catch (SQLException e) {
-      if (PARSE_SYNTAX_ERROR_SQL_STATE.equals(e.getSQLState()) && catalog == null) {
-        // Gracefully handles the case where an older DBSQL version doesn't support all catalogs in
-        // the SHOW TABLES command.
-        LOGGER.debug("SQL command failed with syntax error. Returning empty result set.");
+      if ((PARSE_SYNTAX_ERROR_SQL_STATE.equals(e.getSQLState()) && catalog == null)
+          || isObjectNotFoundException(e)) {
+        LOGGER.debug("SQL error for getTables ({}), returning empty result set.", e.getSQLState());
         return metadataResultSetBuilder.getTablesResult(
             catalog, validatedTableTypes, new ArrayList<>());
       } else {
