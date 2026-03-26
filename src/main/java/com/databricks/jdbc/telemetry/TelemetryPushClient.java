@@ -47,6 +47,11 @@ public class TelemetryPushClient implements ITelemetryPushClient {
     IDatabricksHttpClient httpClient =
         DatabricksHttpClientFactory.getInstance()
             .getClient(connectionContext, HttpClientType.TELEMETRY);
+    if (httpClient == null) {
+      // Connection was closed — HTTP client factory rejected the request to prevent socket leaks.
+      LOGGER.debug("Skipping telemetry push: connection has been closed");
+      return;
+    }
     String path =
         isAuthenticated
             ? PathConstants.TELEMETRY_PATH
