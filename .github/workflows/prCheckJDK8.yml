@@ -19,6 +19,8 @@ on:
         required: false
         default: 'Manual health check for JDK-8'
 
+permissions:
+  contents: read
 
 jobs:
   jdk8-test:
