@@ -11,6 +11,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write
+
 jobs:
   publish-thin:
     # Only run if main JAR workflow succeeded or manual trigger

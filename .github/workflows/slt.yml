@@ -15,6 +15,9 @@ on:
         description: "PAT for the environment we are running SLT on"
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   build:
 
@@ -33,4 +36,6 @@ jobs:
     - name: Build with Maven
       run: mvn -pl jdbc-core -B package --file pom.xml -Dgroups='!Jvm17PlusAndArrowToNioReflectionDisabled'
     - name: Run SQL Logic Tests
-      run: mvn -pl jdbc-core exec:exec -Dslt.token=${{ inputs.token }}
+      env:
+        SLT_TOKEN: ${{ inputs.token }}
+      run: mvn -pl jdbc-core exec:exec -Dslt.token="$SLT_TOKEN"

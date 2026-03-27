@@ -14,6 +14,9 @@ on:
         required: false
         default: 'databricks/databricks-jdbc'
 
+permissions:
+  contents: read
+
 jobs:
   concurrency-tests:
     name: Run Concurrency Execution Tests

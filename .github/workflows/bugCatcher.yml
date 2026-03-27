@@ -5,6 +5,9 @@ on:
     # Runs at 00:00 on every Monday
     - cron: '0 0 * * 1'
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     name: Build and Run Integration Tests

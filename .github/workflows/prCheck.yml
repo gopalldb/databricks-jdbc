@@ -8,6 +8,9 @@ on:
     types: [opened, synchronize, reopened]
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   formatting-check:
     strategy:
