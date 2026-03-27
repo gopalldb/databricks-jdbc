@@ -11,9 +11,7 @@ permissions:
 jobs:
   build-and-test:
     name: Build and Run Integration Tests (PR)
-    runs-on:
-      group: databricks-protected-runner-group
-      labels: linux-ubuntu-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:

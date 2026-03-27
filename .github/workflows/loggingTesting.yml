@@ -19,12 +19,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        github-runner: [linux-ubuntu-latest, windows-server-latest]
+        github-runner: [ubuntu-latest, windows-latest]
         thrift-client: [0, 1]
 
-    runs-on:
-      group: databricks-protected-runner-group
-      labels: ${{ matrix.github-runner }}
+    runs-on: ${{ matrix.github-runner }}
 
     steps:
       - name: Enable long paths

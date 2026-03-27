@@ -25,9 +25,7 @@ permissions:
 jobs:
   jdk8-test:
     name: JDK 8 Unit Tests
-    runs-on:
-      group: databricks-protected-runner-group
-      labels: linux-ubuntu-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Set up JDK 8

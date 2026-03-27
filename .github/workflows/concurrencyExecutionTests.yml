@@ -20,9 +20,7 @@ permissions:
 jobs:
   concurrency-tests:
     name: Run Concurrency Execution Tests
-    runs-on:
-      group: databricks-protected-runner-group
-      labels: linux-ubuntu-latest
+    runs-on: ubuntu-latest
     environment: azure-prod
     strategy:
       fail-fast: false
