@@ -107,11 +107,9 @@ public class DatabricksResultSetMetaData implements ResultSetMetaData {
             typeText = "STRING";
           }
 
-          // store base type eg. DECIMAL instead of DECIMAL(7,2) except for geospatial datatypes
-          String finalTypeText =
-              isGeospatialType(columnTypeName)
-                  ? typeText
-                  : metadataResultSetBuilder.stripTypeName(typeText);
+          // Preserve full type text (e.g., DECIMAL(10,2), ARRAY<INT>) to match Thrift behavior.
+          // Geospatial types also keep full text (e.g., GEOMETRY(4326)).
+          String finalTypeText = typeText;
 
           int columnType = DatabricksTypeUtil.getColumnType(columnTypeName);
           int[] precisionAndScale = getPrecisionAndScale(columnInfo, columnType);
