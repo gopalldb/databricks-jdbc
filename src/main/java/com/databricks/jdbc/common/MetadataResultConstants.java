@@ -28,7 +28,8 @@ public class MetadataResultConstants {
     return msg != null
         && (msg.contains("NO_SUCH_CATALOG_EXCEPTION")
             || msg.contains("TABLE_OR_VIEW_NOT_FOUND")
-            || msg.contains("SCHEMA_NOT_FOUND"));
+            || msg.contains("SCHEMA_NOT_FOUND")
+            || msg.contains("INVALID_PARAMETER_VALUE"));
   }
 
   public static final String[] DEFAULT_TABLE_TYPES = {

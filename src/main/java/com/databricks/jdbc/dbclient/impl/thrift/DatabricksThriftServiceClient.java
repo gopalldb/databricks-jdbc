@@ -536,9 +536,17 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
     if (ProtocolFeatureUtil.supportsAsyncMetadataExecution(serverProtocolVersion)) {
       request.setRunAsync(true);
     }
-    TFetchResultsResp response = (TFetchResultsResp) thriftAccessor.getThriftResponse(request);
-    return metadataResultSetBuilder.getColumnsResult(
-        extractRowsFromColumnar(response.getResults()));
+    try {
+      TFetchResultsResp response = (TFetchResultsResp) thriftAccessor.getThriftResponse(request);
+      return metadataResultSetBuilder.getColumnsResult(
+          extractRowsFromColumnar(response.getResults()));
+    } catch (SQLException e) {
+      if (isObjectNotFoundException(e)) {
+        LOGGER.debug("Object not found for getColumns, returning empty result");
+        return metadataResultSetBuilder.getColumnsResult(new ArrayList<>());
+      }
+      throw e;
+    }
   }
 
   @Override

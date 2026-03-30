@@ -151,7 +151,8 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
           getResultSet(SQL, session, MetadataOperationType.GET_TABLES), validatedTableTypes);
     } catch (SQLException e) {
       if ((PARSE_SYNTAX_ERROR_SQL_STATE.equals(e.getSQLState()) && catalog == null)
-          || isObjectNotFoundException(e)) {
+          || isObjectNotFoundException(e)
+          || isEmptyPatternError(schemaNamePattern, tableNamePattern)) {
         LOGGER.debug("SQL error for getTables ({}), returning empty result set.", e.getSQLState());
         return metadataResultSetBuilder.getTablesResult(
             catalog, validatedTableTypes, new ArrayList<>());
@@ -201,8 +202,9 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
       return metadataResultSetBuilder.getColumnsResult(
           getResultSet(SQL, session, MetadataOperationType.GET_COLUMNS));
     } catch (SQLException e) {
-      if (isObjectNotFoundException(e)) {
-        LOGGER.debug("Object not found for getColumns, returning empty result set.");
+      if (isObjectNotFoundException(e)
+          || isEmptyPatternError(schemaNamePattern, tableNamePattern, columnNamePattern)) {
+        LOGGER.debug("Error for getColumns ({}), returning empty result set.", e.getSQLState());
         return metadataResultSetBuilder.getColumnsResult(new ArrayList<>());
       }
       throw e;
@@ -452,6 +454,20 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
   private boolean isMultipleCatalogSupportDisabled() {
     return queryExecutionClient.getConnectionContext() != null
         && !queryExecutionClient.getConnectionContext().getEnableMultipleCatalogSupport();
+  }
+
+  /**
+   * Returns true if any of the provided patterns is an empty string. Empty string patterns generate
+   * invalid LIKE '' clauses that cause server errors. Per JDBC spec, empty string means "without a
+   * name" which matches nothing in Unity Catalog.
+   */
+  private static boolean isEmptyPatternError(String... patterns) {
+    for (String p : patterns) {
+      if ("".equals(p)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
