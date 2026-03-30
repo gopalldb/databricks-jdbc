@@ -107,9 +107,13 @@ public class DatabricksResultSetMetaData implements ResultSetMetaData {
             typeText = "STRING";
           }
 
-          // Preserve full type text (e.g., DECIMAL(10,2), ARRAY<INT>) to match Thrift behavior.
-          // Geospatial types also keep full text (e.g., GEOMETRY(4326)).
-          String finalTypeText = typeText;
+          // Strip parameterized type suffixes (e.g., ARRAY<INT> -> ARRAY) except for:
+          // - DECIMAL: preserve precision/scale (e.g., DECIMAL(10,2)) to match Thrift behavior
+          // - Geospatial types: preserve SRID (e.g., GEOMETRY(4326))
+          String finalTypeText =
+              (isGeospatialType(columnTypeName) || columnTypeName == ColumnInfoTypeName.DECIMAL)
+                  ? typeText
+                  : metadataResultSetBuilder.stripTypeName(typeText);
 
           int columnType = DatabricksTypeUtil.getColumnType(columnTypeName);
           int[] precisionAndScale = getPrecisionAndScale(columnInfo, columnType);

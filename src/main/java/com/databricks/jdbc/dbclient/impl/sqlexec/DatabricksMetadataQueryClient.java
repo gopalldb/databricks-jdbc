@@ -197,8 +197,16 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
             .setColumnPattern(columnNamePattern);
     String SQL = commandBuilder.getSQLString(CommandName.LIST_COLUMNS);
     LOGGER.debug("SQL command to fetch columns: {}", SQL);
-    return metadataResultSetBuilder.getColumnsResult(
-        getResultSet(SQL, session, MetadataOperationType.GET_COLUMNS));
+    try {
+      return metadataResultSetBuilder.getColumnsResult(
+          getResultSet(SQL, session, MetadataOperationType.GET_COLUMNS));
+    } catch (SQLException e) {
+      if (isObjectNotFoundException(e)) {
+        LOGGER.debug("Object not found for getColumns, returning empty result set.");
+        return metadataResultSetBuilder.getColumnsResult(new ArrayList<>());
+      }
+      throw e;
+    }
   }
 
   @Override
@@ -237,8 +245,16 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
             .setFunctionPattern(functionNamePattern);
     String SQL = commandBuilder.getSQLString(CommandName.LIST_FUNCTIONS);
     LOGGER.debug("SQL command to fetch functions: {}", SQL);
-    return metadataResultSetBuilder.getFunctionsResult(
-        getResultSet(SQL, session, MetadataOperationType.GET_FUNCTIONS), catalog);
+    try {
+      return metadataResultSetBuilder.getFunctionsResult(
+          getResultSet(SQL, session, MetadataOperationType.GET_FUNCTIONS), catalog);
+    } catch (SQLException e) {
+      if (isObjectNotFoundException(e)) {
+        LOGGER.debug("Object not found for getFunctions, returning empty result set.");
+        return metadataResultSetBuilder.getFunctionsResult(catalog, new ArrayList<>());
+      }
+      throw e;
+    }
   }
 
   @Override
