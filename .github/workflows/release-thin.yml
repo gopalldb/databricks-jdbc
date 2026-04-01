@@ -1,3 +1,7 @@
+# TODO(security): When re-enabling this workflow:
+#   1. Restore the original 'if:' condition (see comment on publish-thin job)
+#   2. Consider adding SLSA provenance via slsa-framework/slsa-github-generator
+#   3. Verify release secrets are rotated: GPG_PRIVATE_KEY, MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD
 name: Release Thin JAR
 on:
   workflow_run:
@@ -17,7 +21,9 @@ permissions:
 jobs:
   publish-thin:
     # DISABLED: Third-party package publishing frozen per company-wide policy.
-    # Remove the 'false' condition to re-enable publishing.
+    # To re-enable, replace 'false' below with the original condition:
+    #   github.event_name == 'workflow_dispatch' ||
+    #   (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     if: false
     runs-on: ubuntu-latest
     steps:
