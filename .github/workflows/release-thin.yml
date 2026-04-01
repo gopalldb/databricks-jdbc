@@ -95,14 +95,21 @@ jobs:
 
       - name: Verify main release exists
         if: github.event_name == 'workflow_run'
-        run: |
-          echo "Verifying main release exists for ${{ steps.get_tag.outputs.tag }}"
-          gh release view "${{ steps.get_tag.outputs.tag }}" || {
-            echo "Error: Main release not found for tag ${{ steps.get_tag.outputs.tag }}"
-            exit 1
-          }
-        env:
-          GH_TOKEN: ${{ github.token }}
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const tag = '${{ steps.get_tag.outputs.tag }}';
+            console.log(`Verifying main release exists for ${tag}`);
+            try {
+              await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: tag
+              });
+              console.log(`Release found for ${tag}`);
+            } catch (e) {
+              core.setFailed(`Main release not found for tag ${tag}: ${e.message}`);
+            }
 
       - name: Upload Thin JAR to GitHub Release
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
