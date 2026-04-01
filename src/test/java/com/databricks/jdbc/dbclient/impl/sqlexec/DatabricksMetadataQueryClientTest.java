@@ -458,6 +458,50 @@ public class DatabricksMetadataQueryClientTest {
         ((DatabricksResultSetMetaData) actualResult.getMetaData()).getTotalRows(), 1, description);
   }
 
+  /**
+   * Tests that getSchemas with a JDBC-escaped, mixed-case catalog name returns the unescaped,
+   * lowercased catalog name in the TABLE_CATALOG column. This reproduces the SEA/Thrift parity
+   * issue where SHOW SCHEMAS IN `catalog` doesn't return a catalog column from the server, so the
+   * client populates it from the parameter — which must be unescaped and lowercased.
+   */
+  @Test
+  void testListSchemasWithEscapedUnderscoreCatalog() throws SQLException {
+    String escapedCatalog = "Comparator\\_Tests";
+    String expectedCatalog = "comparator_tests";
+    // CommandBuilder strips escapes for SQL: SHOW SCHEMAS IN `Comparator_Tests`
+    String expectedSQL = "SHOW SCHEMAS IN `Comparator_Tests`";
+
+    when(session.getComputeResource()).thenReturn(mockedComputeResource);
+    DatabricksMetadataQueryClient metadataClient = new DatabricksMetadataQueryClient(mockClient);
+    when(mockClient.executeStatement(
+            eq(expectedSQL),
+            eq(mockedComputeResource),
+            any(),
+            eq(StatementType.METADATA),
+            eq(session),
+            any(),
+            any(MetadataOperationType.class)))
+        .thenReturn(mockedResultSet);
+    when(mockedResultSet.next()).thenReturn(true, false);
+    when(mockedResultSet.getObject("databaseName")).thenReturn("default");
+    doReturn(2).when(mockedMetaData).getColumnCount();
+    doReturn(SCHEMA_COLUMN.getResultSetColumnName()).when(mockedMetaData).getColumnName(1);
+    doReturn(CATALOG_COLUMN.getResultSetColumnName()).when(mockedMetaData).getColumnName(2);
+    when(mockedResultSet.getMetaData()).thenReturn(mockedMetaData);
+    // SHOW SCHEMAS IN `catalog` doesn't return a catalog column — the client must populate it
+    when(mockedResultSet.findColumn(CATALOG_RESULT_COLUMN.getResultSetColumnName()))
+        .thenThrow(DatabricksSQLException.class);
+
+    DatabricksResultSet actualResult = metadataClient.listSchemas(session, escapedCatalog, null);
+
+    assertTrue(actualResult.next());
+    // TABLE_CATALOG (column 2) should be unescaped and lowercased
+    assertEquals(
+        expectedCatalog,
+        actualResult.getObject(2),
+        "TABLE_CATALOG should be unescaped and lowercased to match Thrift behavior");
+  }
+
   @Test
   void testListSchemasNullCatalog() throws SQLException {
     when(session.getComputeResource()).thenReturn(mockedComputeResource);
@@ -715,6 +759,21 @@ public class DatabricksMetadataQueryClientTest {
       assertEquals(METADATA_STATEMENT_ID, actualResult.getStatementId());
       assertEquals(1, ((DatabricksResultSetMetaData) actualResult.getMetaData()).getTotalRows());
     }
+  }
+
+  /**
+   * Tests that getCrossReference returns empty result set (not an exception) when all three
+   * foreign-side parameters are null. Matches Thrift server behavior where null foreign table
+   * delegates to getExportedKeys which returns empty in DBSQL.
+   */
+  @Test
+  void testListCrossReferences_allForeignParamsNull_returnsEmpty() throws Exception {
+    DatabricksMetadataQueryClient metadataClient = new DatabricksMetadataQueryClient(mockClient);
+
+    DatabricksResultSet result =
+        metadataClient.listCrossReferences(
+            session, TEST_CATALOG, TEST_SCHEMA, TEST_TABLE, null, null, null);
+    assertFalse(result.next(), "Should return empty when all foreign params are null, not throw");
   }
 
   @Test

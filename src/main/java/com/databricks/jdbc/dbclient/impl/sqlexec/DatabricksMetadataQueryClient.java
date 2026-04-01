@@ -9,6 +9,7 @@ import com.databricks.jdbc.api.internal.IDatabricksSession;
 import com.databricks.jdbc.common.MetadataOperationType;
 import com.databricks.jdbc.common.StatementType;
 import com.databricks.jdbc.common.util.JdbcThreadUtils;
+import com.databricks.jdbc.common.util.WildcardUtil;
 import com.databricks.jdbc.dbclient.IDatabricksClient;
 import com.databricks.jdbc.dbclient.IDatabricksMetadataClient;
 import com.databricks.jdbc.dbclient.impl.common.CommandConstants;
@@ -98,9 +99,16 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
         new CommandBuilder(catalog, session).setSchemaPattern(schemaNamePattern);
     String SQL = commandBuilder.getSQLString(CommandName.LIST_SCHEMAS);
     LOGGER.debug("SQL command to fetch schemas: {}", SQL);
+    // Strip JDBC escape sequences from catalog for the result set TABLE_CATALOG column.
+    // SHOW SCHEMAS IN `catalog` doesn't return a catalog column from the server,
+    // so the client populates it from this parameter. Without stripping, JDBC-escaped
+    // underscores (\_) would appear in the result (e.g., "comparator\_tests" instead
+    // of "comparator_tests").
+    String resultCatalog =
+        catalog != null ? WildcardUtil.stripJdbcEscapes(catalog).toLowerCase() : null;
     try {
       return metadataResultSetBuilder.getSchemasResult(
-          getResultSet(SQL, session, MetadataOperationType.GET_SCHEMAS), catalog);
+          getResultSet(SQL, session, MetadataOperationType.GET_SCHEMAS), resultCatalog);
     } catch (SQLException e) {
       if (catalog == null && PARSE_SYNTAX_ERROR_SQL_STATE.equals(e.getSQLState())) {
         // This is a fallback for the case where the SQL command fails with "syntax error at or near
@@ -423,6 +431,16 @@ public class DatabricksMetadataQueryClient implements IDatabricksMetadataClient 
     if (!metadataResultSetBuilder.shouldAllowCatalogAccess(parentCatalog, currentCatalog, session)
         || !metadataResultSetBuilder.shouldAllowCatalogAccess(
             foreignCatalog, currentCatalog, session)) {
+      return metadataResultSetBuilder.getCrossRefsResult(new ArrayList<>());
+    }
+
+    // When all three foreign-side parameters are null, SHOW FOREIGN KEYS cannot be constructed.
+    // Match Thrift server behavior which delegates to getExportedKeys in this case
+    // (returns 0 rows since exported keys are not tracked in DBSQL).
+    if (foreignCatalog == null && foreignSchema == null && foreignTable == null) {
+      LOGGER.debug(
+          "All foreign key parameters are null for getCrossReference, "
+              + "returning empty result set to match Thrift behavior.");
       return metadataResultSetBuilder.getCrossRefsResult(new ArrayList<>());
     }
 
