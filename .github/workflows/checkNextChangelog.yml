@@ -25,8 +25,7 @@ jobs:
       - name: Fetch list of changed files
         id: changed-files
         run: |
-          # Use git diff to get changed files (no API call needed,
-          # avoids IP allow list issues with GitHub-hosted runners)
+          # Use git diff to get changed files (no API call needed)
           files=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
 
           # Sanitize to avoid code injection
