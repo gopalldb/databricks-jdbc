@@ -60,11 +60,20 @@ public class DatabricksCallableStatement extends DatabricksPreparedStatement
     }
   }
 
+  /**
+   * Throws for methods with non-void return types. Always throws, never returns. The generic return
+   * type avoids separate helpers for each return type.
+   */
   private <T> T throwOutParamNotSupported() throws SQLException {
     throw new DatabricksSQLFeatureNotSupportedException(OUT_PARAM_NOT_SUPPORTED);
   }
 
-  private <T> T throwNamedParamNotSupported() throws SQLException {
+  /** Throws for void methods (registerOutParameter, named setXXX). */
+  private void throwOutParamNotSupportedVoid() throws SQLException {
+    throw new DatabricksSQLFeatureNotSupportedException(OUT_PARAM_NOT_SUPPORTED);
+  }
+
+  private void throwNamedParamNotSupportedVoid() throws SQLException {
     throw new DatabricksSQLFeatureNotSupportedException(NAMED_PARAM_NOT_SUPPORTED);
   }
 
@@ -74,35 +83,72 @@ public class DatabricksCallableStatement extends DatabricksPreparedStatement
 
   @Override
   public void registerOutParameter(int parameterIndex, int sqlType) throws SQLException {
-    throwOutParamNotSupported();
+    throwOutParamNotSupportedVoid();
   }
 
   @Override
   public void registerOutParameter(int parameterIndex, int sqlType, int scale) throws SQLException {
-    throwOutParamNotSupported();
+    throwOutParamNotSupportedVoid();
   }
 
   @Override
   public void registerOutParameter(int parameterIndex, int sqlType, String typeName)
       throws SQLException {
-    throwOutParamNotSupported();
+    throwOutParamNotSupportedVoid();
   }
 
   @Override
   public void registerOutParameter(String parameterName, int sqlType) throws SQLException {
-    throwOutParamNotSupported();
+    throwOutParamNotSupportedVoid();
   }
 
   @Override
   public void registerOutParameter(String parameterName, int sqlType, int scale)
       throws SQLException {
-    throwOutParamNotSupported();
+    throwOutParamNotSupportedVoid();
   }
 
   @Override
   public void registerOutParameter(String parameterName, int sqlType, String typeName)
       throws SQLException {
-    throwOutParamNotSupported();
+    throwOutParamNotSupportedVoid();
+  }
+
+  // Java 8+ SQLType-based overrides — explicit overrides to ensure consistent
+  // Databricks-specific error messages rather than relying on default method delegation.
+
+  @Override
+  public void registerOutParameter(int parameterIndex, SQLType sqlType) throws SQLException {
+    throwOutParamNotSupportedVoid();
+  }
+
+  @Override
+  public void registerOutParameter(int parameterIndex, SQLType sqlType, int scale)
+      throws SQLException {
+    throwOutParamNotSupportedVoid();
+  }
+
+  @Override
+  public void registerOutParameter(int parameterIndex, SQLType sqlType, String typeName)
+      throws SQLException {
+    throwOutParamNotSupportedVoid();
+  }
+
+  @Override
+  public void registerOutParameter(String parameterName, SQLType sqlType) throws SQLException {
+    throwOutParamNotSupportedVoid();
+  }
+
+  @Override
+  public void registerOutParameter(String parameterName, SQLType sqlType, int scale)
+      throws SQLException {
+    throwOutParamNotSupportedVoid();
+  }
+
+  @Override
+  public void registerOutParameter(String parameterName, SQLType sqlType, String typeName)
+      throws SQLException {
+    throwOutParamNotSupportedVoid();
   }
 
   // ---------------------------------------------------------------------------
@@ -434,232 +480,245 @@ public class DatabricksCallableStatement extends DatabricksPreparedStatement
 
   @Override
   public void setURL(String parameterName, URL val) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setNull(String parameterName, int sqlType) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setBoolean(String parameterName, boolean x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setByte(String parameterName, byte x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setShort(String parameterName, short x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setInt(String parameterName, int x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setLong(String parameterName, long x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setFloat(String parameterName, float x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setDouble(String parameterName, double x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setBigDecimal(String parameterName, BigDecimal x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setString(String parameterName, String x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setBytes(String parameterName, byte[] x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setDate(String parameterName, Date x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setTime(String parameterName, Time x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setTimestamp(String parameterName, Timestamp x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setAsciiStream(String parameterName, InputStream x, int length) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setBinaryStream(String parameterName, InputStream x, int length) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setObject(String parameterName, Object x, int targetSqlType, int scale)
       throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setObject(String parameterName, Object x, int targetSqlType) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setObject(String parameterName, Object x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setCharacterStream(String parameterName, Reader reader, int length)
       throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setDate(String parameterName, Date x, Calendar cal) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setTime(String parameterName, Time x, Calendar cal) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setTimestamp(String parameterName, Timestamp x, Calendar cal) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setNull(String parameterName, int sqlType, String typeName) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setRowId(String parameterName, RowId x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setNString(String parameterName, String value) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setNCharacterStream(String parameterName, Reader value, long length)
       throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setNClob(String parameterName, NClob value) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setClob(String parameterName, Reader reader, long length) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setBlob(String parameterName, InputStream inputStream, long length)
       throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setNClob(String parameterName, Reader reader, long length) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setSQLXML(String parameterName, SQLXML xmlObject) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setBlob(String parameterName, Blob x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setClob(String parameterName, Clob x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setAsciiStream(String parameterName, InputStream x, long length) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setBinaryStream(String parameterName, InputStream x, long length)
       throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setCharacterStream(String parameterName, Reader reader, long length)
       throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setAsciiStream(String parameterName, InputStream x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setBinaryStream(String parameterName, InputStream x) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setCharacterStream(String parameterName, Reader reader) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setNCharacterStream(String parameterName, Reader value) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setClob(String parameterName, Reader reader) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setBlob(String parameterName, InputStream inputStream) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
   }
 
   @Override
   public void setNClob(String parameterName, Reader reader) throws SQLException {
-    throwNamedParamNotSupported();
+    throwNamedParamNotSupportedVoid();
+  }
+
+  // Java 8+ SQLType-based named parameter overrides
+
+  @Override
+  public void setObject(String parameterName, Object x, SQLType targetSqlType, int scaleOrLength)
+      throws SQLException {
+    throwNamedParamNotSupportedVoid();
+  }
+
+  @Override
+  public void setObject(String parameterName, Object x, SQLType targetSqlType) throws SQLException {
+    throwNamedParamNotSupportedVoid();
   }
 }
