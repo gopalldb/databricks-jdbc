@@ -36,8 +36,8 @@ public class DatabricksCallableStatementTest {
           + "transportMode=http;ssl=1;AuthMech=3;"
           + "httpPath=/sql/1.0/warehouses/99999999;";
   private static final String CALL_SQL = "{call my_proc(?, ?)}";
-  // Note: DEFAULT_ESCAPE_PROCESSING is false, so the raw SQL is passed to executeStatement
-  private static final String CALL_SQL_AS_EXECUTED = CALL_SQL;
+  // DatabricksCallableStatement enables escape processing, so {call ...} is converted to CALL ...
+  private static final String CALL_SQL_AS_EXECUTED = "CALL my_proc(?, ?)";
 
   @Mock DatabricksResultSet resultSet;
   @Mock DatabricksSdkClient client;

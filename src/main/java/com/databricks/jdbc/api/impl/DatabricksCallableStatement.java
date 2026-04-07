@@ -49,6 +49,10 @@ public class DatabricksCallableStatement extends DatabricksPreparedStatement
       throws SQLException {
     super(connection, sql);
     validateNoReturnValueSyntax(sql);
+    // Enable escape processing for callable statements so {call proc(?)} is
+    // converted to CALL proc(?). This overrides DEFAULT_ESCAPE_PROCESSING (false)
+    // only for this statement instance — other statement types are unaffected.
+    setEscapeProcessing(true);
     LOGGER.debug("Created DatabricksCallableStatement for SQL: {}", sql);
   }
 
