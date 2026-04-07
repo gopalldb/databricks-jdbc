@@ -11,6 +11,7 @@
 - Fixed `PARSE_SYNTAX_ERROR` for column names containing special characters (e.g., dots) when `EnableBatchedInserts` is enabled, by re-quoting column names with backticks in reconstructed multi-row INSERT statements.
 - Fixed Volume ingestion for SEA mode, which was broken due to statement being closed prematurely.
 - Fixed preserving error message during query results expiry and graceful handling of RuntimeException.
+- Fixed escaped pattern characters in catalogName for `getSchemas`, as returned catalogName should be unescaped.
 
 ---
 *Note: When making changes, please add your change under the appropriate section
