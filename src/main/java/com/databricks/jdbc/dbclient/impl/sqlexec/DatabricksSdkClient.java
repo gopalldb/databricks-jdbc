@@ -561,11 +561,14 @@ public class DatabricksSdkClient implements IDatabricksClient {
     return clientConfigurator.getDatabricksConfig();
   }
 
-  private boolean useCloudFetchForResult(StatementType statementType) {
+  /**
+   * Determines whether cloud fetch (Arrow + external links) should be used for results. Based
+   * solely on connection parameters — not on statement type. Arrow must be enabled for cloud fetch,
+   * and the cloud fetch connection parameter (EnableQueryResultDownload) must also be enabled.
+   */
+  private boolean useCloudFetchForResult() {
     return this.connectionContext.shouldEnableArrow()
-        && (statementType == StatementType.QUERY
-            || statementType == StatementType.SQL
-            || statementType == StatementType.METADATA);
+        && this.connectionContext.isCloudFetchEnabled();
   }
 
   private Map<String, String> getHeaders(String method) {
@@ -644,13 +647,13 @@ public class DatabricksSdkClient implements IDatabricksClient {
       IDatabricksStatementInternal parentStatement,
       boolean executeAsync)
       throws SQLException {
-    Format format = useCloudFetchForResult(statementType) ? Format.ARROW_STREAM : Format.JSON_ARRAY;
+    boolean cloudFetch = useCloudFetchForResult();
+    Format format = cloudFetch ? Format.ARROW_STREAM : Format.JSON_ARRAY;
     Disposition defaultDisposition =
         connectionContext.isSqlExecHybridResultsEnabled()
             ? Disposition.INLINE_OR_EXTERNAL_LINKS
             : Disposition.EXTERNAL_LINKS;
-    Disposition disposition =
-        useCloudFetchForResult(statementType) ? defaultDisposition : Disposition.INLINE;
+    Disposition disposition = cloudFetch ? defaultDisposition : Disposition.INLINE;
     long maxRows =
         (parentStatement == null) ? DEFAULT_RESULT_ROW_LIMIT : parentStatement.getMaxRows();
     CompressionCodec compressionCodec = session.getCompressionCodec();
