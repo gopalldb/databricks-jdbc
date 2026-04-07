@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Added `CallableStatement` support with IN parameters. `Connection.prepareCall()` now returns a working `DatabricksCallableStatement` that supports positional parameter binding and execution via `{call proc(?)}` JDBC escape syntax. OUT/INOUT parameters and named parameters throw `SQLFeatureNotSupportedException`.
 
 ### Updated
 
