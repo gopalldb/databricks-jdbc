@@ -53,7 +53,28 @@ public class DatabricksCallableStatement extends DatabricksPreparedStatement
     // converted to CALL proc(?). This overrides DEFAULT_ESCAPE_PROCESSING (false)
     // only for this statement instance — other statement types are unaffected.
     setEscapeProcessing(true);
+    // Stored procedures can return result sets, so always allow executeQuery().
+    // The parent computes shouldReturnResultSet from the raw SQL ({call ...} doesn't
+    // match CALL_PATTERN), so we override it here.
+    this.shouldReturnResultSet = true;
     LOGGER.debug("Created DatabricksCallableStatement for SQL: {}", sql);
+  }
+
+  /**
+   * Escape processing is required for callable statements to convert {@code {call proc(?)}} to
+   * {@code CALL proc(?)}. Disabling it is rejected with a warning — callers using native {@code
+   * CALL} syntax directly are unaffected since the escape conversion is a no-op for that form.
+   */
+  @Override
+  public void setEscapeProcessing(boolean enable) throws SQLException {
+    if (!enable) {
+      LOGGER.warn(
+          "setEscapeProcessing(false) ignored for CallableStatement — "
+              + "escape processing is required to convert {call ...} to CALL syntax. "
+              + "If using native CALL syntax, this has no effect.");
+      return;
+    }
+    super.setEscapeProcessing(true);
   }
 
   private void validateNoReturnValueSyntax(String sql) throws SQLException {

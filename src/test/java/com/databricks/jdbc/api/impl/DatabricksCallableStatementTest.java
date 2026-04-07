@@ -165,8 +165,8 @@ public class DatabricksCallableStatementTest {
   class ExecutionTests {
 
     @Test
-    @DisplayName("IN parameters can be bound and execute works")
-    void testExecuteWithInParams() throws Exception {
+    @DisplayName("execute() returns true for callable statements (procedures can return results)")
+    void testExecuteReturnsTrueForCallable() throws Exception {
       DatabricksConnection connection = createConnection();
       DatabricksCallableStatement stmt = new DatabricksCallableStatement(connection, CALL_SQL);
 
@@ -183,38 +183,15 @@ public class DatabricksCallableStatementTest {
               any()))
           .thenReturn(resultSet);
 
+      // shouldReturnResultSet is overridden to true for callable statements
       boolean hasResultSet = stmt.execute();
-      assertFalse(hasResultSet);
+      assertTrue(hasResultSet);
       stmt.close();
     }
 
     @Test
-    @DisplayName("executeUpdate works for callable statement")
-    void testExecuteUpdate() throws Exception {
-      DatabricksConnection connection = createConnection();
-      DatabricksCallableStatement stmt = new DatabricksCallableStatement(connection, CALL_SQL);
-
-      stmt.setInt(1, 42);
-      stmt.setString(2, "test");
-
-      when(client.executeStatement(
-              eq(CALL_SQL_AS_EXECUTED),
-              eq(new Warehouse(WAREHOUSE_ID)),
-              any(HashMap.class),
-              eq(StatementType.UPDATE),
-              any(IDatabricksSession.class),
-              eq(stmt),
-              any()))
-          .thenReturn(resultSet);
-
-      int count = stmt.executeUpdate();
-      assertEquals(0, count);
-      stmt.close();
-    }
-
-    @Test
-    @DisplayName("executeQuery on CALL statement throws (CALL is non-query)")
-    void testExecuteQueryThrowsForCallStatement() throws Exception {
+    @DisplayName("executeQuery() works for callable statements")
+    void testExecuteQueryWorks() throws Exception {
       DatabricksConnection connection = createConnection();
       DatabricksCallableStatement stmt = new DatabricksCallableStatement(connection, CALL_SQL);
 
@@ -231,8 +208,33 @@ public class DatabricksCallableStatementTest {
               any()))
           .thenReturn(resultSet);
 
-      // CALL is classified as non-query, so executeQuery throws after execution
-      assertThrows(DatabricksSQLException.class, stmt::executeQuery);
+      ResultSet rs = stmt.executeQuery();
+      assertNotNull(rs);
+      assertEquals(resultSet, rs);
+      stmt.close();
+    }
+
+    @Test
+    @DisplayName("executeUpdate() throws for callable statements (they are result-set-returning)")
+    void testExecuteUpdateThrowsForCallable() throws Exception {
+      DatabricksConnection connection = createConnection();
+      DatabricksCallableStatement stmt = new DatabricksCallableStatement(connection, CALL_SQL);
+
+      stmt.setInt(1, 42);
+      stmt.setString(2, "test");
+
+      when(client.executeStatement(
+              eq(CALL_SQL_AS_EXECUTED),
+              eq(new Warehouse(WAREHOUSE_ID)),
+              any(HashMap.class),
+              eq(StatementType.UPDATE),
+              any(IDatabricksSession.class),
+              eq(stmt),
+              any()))
+          .thenReturn(resultSet);
+
+      // shouldReturnResultSet is true, so executeUpdate throws
+      assertThrows(DatabricksSQLException.class, stmt::executeUpdate);
       stmt.close();
     }
 
@@ -272,8 +274,57 @@ public class DatabricksCallableStatementTest {
               any()))
           .thenReturn(resultSet);
 
+      // executeBatch uses UPDATE path internally, but batch doesn't check shouldReturnResultSet
       int[] results = stmt.executeBatch();
       assertNotNull(results);
+      stmt.close();
+    }
+
+    @Test
+    @DisplayName("getParameterMetaData correctly counts params in {call ...} syntax")
+    void testParameterCountInCallSyntax() throws Exception {
+      DatabricksConnection connection = createConnection();
+      DatabricksCallableStatement stmt = new DatabricksCallableStatement(connection, CALL_SQL);
+
+      ParameterMetaData pmd = stmt.getParameterMetaData();
+      assertNotNull(pmd);
+      assertEquals(2, pmd.getParameterCount());
+      stmt.close();
+    }
+
+    @Test
+    @DisplayName("getParameterMetaData counts params for no-arg procedure")
+    void testParameterCountNoArgs() throws Exception {
+      DatabricksConnection connection = createConnection();
+      DatabricksCallableStatement stmt =
+          new DatabricksCallableStatement(connection, "{call my_proc()}");
+
+      assertEquals(0, stmt.getParameterMetaData().getParameterCount());
+      stmt.close();
+    }
+
+    @Test
+    @DisplayName("setEscapeProcessing(false) is rejected for callable statements")
+    void testSetEscapeProcessingFalseRejected() throws Exception {
+      DatabricksConnection connection = createConnection();
+      DatabricksCallableStatement stmt = new DatabricksCallableStatement(connection, CALL_SQL);
+
+      // Should not throw, but should be silently ignored
+      assertDoesNotThrow(() -> stmt.setEscapeProcessing(false));
+
+      // Verify escape processing is still active by executing — the mock expects
+      // the converted SQL, which only happens if escape processing is on
+      when(client.executeStatement(
+              eq(CALL_SQL_AS_EXECUTED),
+              eq(new Warehouse(WAREHOUSE_ID)),
+              any(HashMap.class),
+              eq(StatementType.SQL),
+              any(IDatabricksSession.class),
+              eq(stmt),
+              any()))
+          .thenReturn(resultSet);
+
+      assertTrue(stmt.execute());
       stmt.close();
     }
 
