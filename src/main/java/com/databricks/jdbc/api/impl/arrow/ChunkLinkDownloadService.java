@@ -287,9 +287,7 @@ public class ChunkLinkDownloadService<T extends AbstractArrowResultChunk> {
                     triggerNextBatchDownload();
                   }
                 }
-              } catch (SQLException e) {
-                handleBatchDownloadError(batchStartIndex, e);
-              } catch (DatabricksError e) {
+              } catch (SQLException | DatabricksError e) {
                 // DatabricksError (RuntimeException) is thrown by the SDK client on HTTP
                 // errors (e.g. 404 when result expires). Without catching it, link futures
                 // are left unresolved, causing download tasks to block indefinitely.
