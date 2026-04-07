@@ -23,6 +23,11 @@ import java.util.regex.Pattern;
  * <p>OUT and INOUT parameters are not supported. All {@code registerOutParameter()}, output
  * retrieval ({@code getXXX(int/String)}), and named parameter ({@code setXXX(String, value)})
  * methods throw {@link SQLFeatureNotSupportedException}.
+ *
+ * <p>Since stored procedures may return result sets, {@code shouldReturnResultSet} is always {@code
+ * true}. Use {@code execute()} or {@code executeQuery()} to invoke procedures. {@code
+ * executeUpdate()} will throw because it conflicts with result-set-returning semantics — use {@code
+ * execute()} for DML procedures and check {@code getUpdateCount()} afterward.
  */
 public class DatabricksCallableStatement extends DatabricksPreparedStatement
     implements CallableStatement {
@@ -37,7 +42,13 @@ public class DatabricksCallableStatement extends DatabricksPreparedStatement
   private static final Pattern RETURN_VALUE_SYNTAX =
       Pattern.compile("\\{\\s*\\?\\s*=\\s*call\\b", Pattern.CASE_INSENSITIVE);
 
-  /** Matches JDBC callable escape syntax: {@code {call proc(...)}}. */
+  /**
+   * Matches JDBC callable escape syntax: {@code {call proc(...)}}. Uses {@code [^}]*} to match
+   * arguments, which does not handle nested JDBC escape sequences like {@code {call proc({fn
+   * CONCAT('a','b')})}}. This is consistent with {@link
+   * com.databricks.jdbc.common.util.StringUtil#convertJdbcEscapeSequences} which has the same
+   * limitation. Nested escapes should be pre-processed or avoided in favor of native SQL syntax.
+   */
   private static final Pattern CALL_ESCAPE_SYNTAX =
       Pattern.compile("\\{\\s*call\\s+([^}]*)\\}", Pattern.CASE_INSENSITIVE);
 

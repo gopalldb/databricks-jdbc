@@ -165,6 +165,32 @@ public class DatabricksCallableStatementTest {
   class ExecutionTests {
 
     @Test
+    @DisplayName("native CALL syntax (no JDBC escape) works with execute()")
+    void testNativeCallSyntaxExecute() throws Exception {
+      DatabricksConnection connection = createConnection();
+      String nativeCallSql = "CALL my_proc(?, ?)";
+      DatabricksCallableStatement stmt = new DatabricksCallableStatement(connection, nativeCallSql);
+
+      stmt.setInt(1, 42);
+      stmt.setString(2, "test");
+
+      when(client.executeStatement(
+              eq(nativeCallSql),
+              eq(new Warehouse(WAREHOUSE_ID)),
+              any(HashMap.class),
+              eq(StatementType.SQL),
+              any(IDatabricksSession.class),
+              eq(stmt),
+              any()))
+          .thenReturn(resultSet);
+
+      // Native CALL syntax is not modified by convertCallEscapeSyntax (no braces)
+      // and CALL_PATTERN matches, so shouldReturnResultSet is true
+      assertTrue(stmt.execute());
+      stmt.close();
+    }
+
+    @Test
     @DisplayName("execute() returns true for callable statements (procedures can return results)")
     void testExecuteReturnsTrueForCallable() throws Exception {
       DatabricksConnection connection = createConnection();
