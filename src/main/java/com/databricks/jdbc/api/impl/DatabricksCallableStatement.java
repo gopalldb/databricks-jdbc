@@ -37,6 +37,10 @@ public class DatabricksCallableStatement extends DatabricksPreparedStatement
   private static final Pattern RETURN_VALUE_SYNTAX =
       Pattern.compile("\\{\\s*\\?\\s*=\\s*call\\b", Pattern.CASE_INSENSITIVE);
 
+  /** Matches JDBC callable escape syntax: {@code {call proc(...)}}. */
+  private static final Pattern CALL_ESCAPE_SYNTAX =
+      Pattern.compile("\\{\\s*call\\s+([^}]*)\\}", Pattern.CASE_INSENSITIVE);
+
   private static final String OUT_PARAM_NOT_SUPPORTED =
       "OUT and INOUT parameters are not supported. "
           + "Only IN parameters are supported for callable statements. "
@@ -47,34 +51,27 @@ public class DatabricksCallableStatement extends DatabricksPreparedStatement
 
   public DatabricksCallableStatement(DatabricksConnection connection, String sql)
       throws SQLException {
-    super(connection, sql);
+    // Convert {call proc(?)} to CALL proc(?) before passing to parent so that:
+    // 1. The parent's shouldReturnResultSet matches CALL_PATTERN correctly
+    // 2. The conversion is independent of the escapeProcessing flag
+    // 3. Other JDBC escape sequences ({d ...}, {fn ...}, etc.) remain controlled
+    //    by setEscapeProcessing as usual
+    super(connection, convertCallEscapeSyntax(sql));
     validateNoReturnValueSyntax(sql);
-    // Enable escape processing for callable statements so {call proc(?)} is
-    // converted to CALL proc(?). This overrides DEFAULT_ESCAPE_PROCESSING (false)
-    // only for this statement instance — other statement types are unaffected.
-    setEscapeProcessing(true);
-    // Stored procedures can return result sets, so always allow executeQuery().
-    // The parent computes shouldReturnResultSet from the raw SQL ({call ...} doesn't
-    // match CALL_PATTERN), so we override it here.
-    this.shouldReturnResultSet = true;
     LOGGER.debug("Created DatabricksCallableStatement for SQL: {}", sql);
   }
 
   /**
-   * Escape processing is required for callable statements to convert {@code {call proc(?)}} to
-   * {@code CALL proc(?)}. Disabling it is rejected with a warning — callers using native {@code
-   * CALL} syntax directly are unaffected since the escape conversion is a no-op for that form.
+   * Converts JDBC callable escape syntax {@code {call proc(?, ?)}} to native {@code CALL proc(?,
+   * ?)}. This is done unconditionally (not gated by escapeProcessing) because the {@code {call
+   * ...}} form is specific to callable statements and must always be resolved. Other JDBC escape
+   * sequences are handled independently by the standard escape processing path.
    */
-  @Override
-  public void setEscapeProcessing(boolean enable) throws SQLException {
-    if (!enable) {
-      LOGGER.warn(
-          "setEscapeProcessing(false) ignored for CallableStatement — "
-              + "escape processing is required to convert {call ...} to CALL syntax. "
-              + "If using native CALL syntax, this has no effect.");
-      return;
+  private static String convertCallEscapeSyntax(String sql) {
+    if (sql == null) {
+      return null;
     }
-    super.setEscapeProcessing(true);
+    return CALL_ESCAPE_SYNTAX.matcher(sql).replaceAll("CALL $1");
   }
 
   private void validateNoReturnValueSyntax(String sql) throws SQLException {

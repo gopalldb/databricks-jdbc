@@ -304,16 +304,16 @@ public class DatabricksCallableStatementTest {
     }
 
     @Test
-    @DisplayName("setEscapeProcessing(false) is rejected for callable statements")
-    void testSetEscapeProcessingFalseRejected() throws Exception {
+    @DisplayName("{call ...} conversion is independent of escapeProcessing flag")
+    void testCallConversionIndependentOfEscapeProcessing() throws Exception {
       DatabricksConnection connection = createConnection();
       DatabricksCallableStatement stmt = new DatabricksCallableStatement(connection, CALL_SQL);
 
-      // Should not throw, but should be silently ignored
-      assertDoesNotThrow(() -> stmt.setEscapeProcessing(false));
+      // Disable escape processing — {call ...} should still be converted
+      stmt.setEscapeProcessing(false);
 
-      // Verify escape processing is still active by executing — the mock expects
-      // the converted SQL, which only happens if escape processing is on
+      // The mock expects CALL_SQL_AS_EXECUTED ("CALL my_proc(?, ?)") because
+      // the {call} → CALL conversion happens at construction, not via escape processing
       when(client.executeStatement(
               eq(CALL_SQL_AS_EXECUTED),
               eq(new Warehouse(WAREHOUSE_ID)),
