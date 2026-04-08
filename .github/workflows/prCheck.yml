@@ -74,30 +74,9 @@ jobs:
           java-version: ${{ matrix.java-version }}
           distribution: 'adopt'
 
-      - name: Install git and enable long paths (Windows)
+      - name: Enable long paths
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-            Write-Host "Git not found, installing portable git..."
-            $gitVersion = "2.47.1"
-            $gitUrl = "https://github.com/git-for-windows/git/releases/download/v${gitVersion}.windows.1/PortableGit-${gitVersion}-64-bit.7z.exe"
-            $gitInstallDir = "C:\git"
-            Invoke-WebRequest -Uri $gitUrl -OutFile "$env:TEMP\PortableGit.exe" -UseBasicParsing
-            Start-Process -FilePath "$env:TEMP\PortableGit.exe" -ArgumentList "-o`"$gitInstallDir`" -y" -Wait
-            # Add to PATH for subsequent steps
-            echo "$gitInstallDir\cmd" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
-            echo "$gitInstallDir\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
-            echo "$gitInstallDir\usr\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
-            # Also set for current step
-            $env:PATH = "$gitInstallDir\cmd;$gitInstallDir\bin;$gitInstallDir\usr\bin;$env:PATH"
-            Write-Host "Git installed: $(git --version)"
-          } else {
-            Write-Host "Git already available: $(git --version)"
-          }
-          # Enable long paths
-          git config --system core.longpaths true
-          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+        run: git config --system core.longpaths true
 
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -211,30 +190,9 @@ jobs:
           java-version: ${{ matrix.java-version }}
           distribution: 'adopt'
 
-      - name: Install git and enable long paths (Windows)
+      - name: Enable long paths
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-            Write-Host "Git not found, installing portable git..."
-            $gitVersion = "2.47.1"
-            $gitUrl = "https://github.com/git-for-windows/git/releases/download/v${gitVersion}.windows.1/PortableGit-${gitVersion}-64-bit.7z.exe"
-            $gitInstallDir = "C:\git"
-            Invoke-WebRequest -Uri $gitUrl -OutFile "$env:TEMP\PortableGit.exe" -UseBasicParsing
-            Start-Process -FilePath "$env:TEMP\PortableGit.exe" -ArgumentList "-o`"$gitInstallDir`" -y" -Wait
-            # Add to PATH for subsequent steps
-            echo "$gitInstallDir\cmd" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
-            echo "$gitInstallDir\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
-            echo "$gitInstallDir\usr\bin" | Out-File -Append -FilePath $env:GITHUB_PATH -Encoding utf8
-            # Also set for current step
-            $env:PATH = "$gitInstallDir\cmd;$gitInstallDir\bin;$gitInstallDir\usr\bin;$env:PATH"
-            Write-Host "Git installed: $(git --version)"
-          } else {
-            Write-Host "Git already available: $(git --version)"
-          }
-          # Enable long paths
-          git config --system core.longpaths true
-          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+        run: git config --system core.longpaths true
 
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
