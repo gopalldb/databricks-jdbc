@@ -35,10 +35,33 @@ runs:
               <url>https://databricks.jfrog.io/artifactory/db-maven/</url>
             </mirror>
           </mirrors>
-          <!-- No <servers> block: forked PRs use cached dependencies only.
-               Any cache miss will produce a clear HTTP 401 error indicating
-               the dependency is not in cache. Ask a maintainer to run the
-               "Warm Maven Dependency Cache" workflow with your PR number. -->
+          <!-- No <servers> block: forked PRs use cached dependencies only. -->
+          <!-- updatePolicy=never prevents Maven from checking the remote for
+               updates, avoiding 401 errors when artifacts are already cached. -->
+          <profiles>
+            <profile>
+              <id>cache-only</id>
+              <repositories>
+                <repository>
+                  <id>jfrog-central</id>
+                  <url>https://databricks.jfrog.io/artifactory/db-maven/</url>
+                  <releases><updatePolicy>never</updatePolicy></releases>
+                  <snapshots><updatePolicy>never</updatePolicy></snapshots>
+                </repository>
+              </repositories>
+              <pluginRepositories>
+                <pluginRepository>
+                  <id>jfrog-central</id>
+                  <url>https://databricks.jfrog.io/artifactory/db-maven/</url>
+                  <releases><updatePolicy>never</updatePolicy></releases>
+                  <snapshots><updatePolicy>never</updatePolicy></snapshots>
+                </pluginRepository>
+              </pluginRepositories>
+            </profile>
+          </profiles>
+          <activeProfiles>
+            <activeProfile>cache-only</activeProfile>
+          </activeProfiles>
         </settings>
         SETTINGS_EOF
 
