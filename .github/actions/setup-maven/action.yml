@@ -26,42 +26,21 @@ runs:
       shell: bash
       run: |
         mkdir -p ~/.m2
-        cat > ~/.m2/settings.xml << 'SETTINGS_EOF'
+        # Point the mirror to the local Maven repo. This forces Maven to resolve
+        # everything from ~/.m2/repository (the restored cache) without contacting
+        # any remote server. No network requests = no 401 errors.
+        # A file:// mirror effectively makes Maven work in offline mode while
+        # still honoring the mirror configuration (no direct Maven Central access).
+        LOCAL_REPO="$HOME/.m2/repository"
+        cat > ~/.m2/settings.xml << SETTINGS_EOF
         <settings>
           <mirrors>
             <mirror>
-              <id>jfrog-central</id>
+              <id>local-cache</id>
               <mirrorOf>*</mirrorOf>
-              <url>https://databricks.jfrog.io/artifactory/db-maven/</url>
+              <url>file://${LOCAL_REPO}</url>
             </mirror>
           </mirrors>
-          <!-- No <servers> block: forked PRs use cached dependencies only. -->
-          <!-- updatePolicy=never prevents Maven from checking the remote for
-               updates, avoiding 401 errors when artifacts are already cached. -->
-          <profiles>
-            <profile>
-              <id>cache-only</id>
-              <repositories>
-                <repository>
-                  <id>jfrog-central</id>
-                  <url>https://databricks.jfrog.io/artifactory/db-maven/</url>
-                  <releases><updatePolicy>never</updatePolicy></releases>
-                  <snapshots><updatePolicy>never</updatePolicy></snapshots>
-                </repository>
-              </repositories>
-              <pluginRepositories>
-                <pluginRepository>
-                  <id>jfrog-central</id>
-                  <url>https://databricks.jfrog.io/artifactory/db-maven/</url>
-                  <releases><updatePolicy>never</updatePolicy></releases>
-                  <snapshots><updatePolicy>never</updatePolicy></snapshots>
-                </pluginRepository>
-              </pluginRepositories>
-            </profile>
-          </profiles>
-          <activeProfiles>
-            <activeProfile>cache-only</activeProfile>
-          </activeProfiles>
         </settings>
         SETTINGS_EOF
 
