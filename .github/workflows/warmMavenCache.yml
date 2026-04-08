@@ -133,19 +133,26 @@ jobs:
 
           # Step 1: Install all modules — resolves external dependencies from JFrog and
           # installs inter-module SNAPSHOTs (e.g., jdbc-core used by assembly-thin/uber).
-          echo "Installing all modules to populate dependency cache..."
+          echo "=== Step 1: Installing all modules ==="
           mvn -B install -DskipTests -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Ddependency-check.skip=true
 
-          # Step 2: Resolve all plugins across all profiles. Some plugins (e.g.,
-          # maven-toolchains-plugin, spotless, jacoco) are only resolved when specific
-          # goals or profiles are active. This ensures they're in the cache.
-          echo "Resolving plugins across all profiles..."
-          mvn -B dependency:resolve-plugins -pl jdbc-core || true
+          # Step 2: Run the exact same commands that PR workflows use.
+          # This ensures ALL plugins, providers, and metadata are resolved and cached,
+          # including test-time artifacts (surefire-junit-platform, jacoco agent) and
+          # build-time plugins (spotless, toolchains, owasp) that mvn install alone
+          # doesn't trigger.
 
-          # Step 3: Trigger spotless and jacoco plugin downloads (used in PR checks).
-          echo "Triggering spotless and jacoco plugin downloads..."
-          mvn -B spotless:check -pl jdbc-core -Dspotless.check.skip=false 2>/dev/null || true
-          mvn -B jacoco:prepare-agent -pl jdbc-core 2>/dev/null || true
+          echo "=== Step 2: Running unit test compilation + surefire resolution ==="
+          mvn -B -pl jdbc-core test -Dtest=NoSuchTest -DfailIfNoTests=false -Ddependency-check.skip=true || true
+
+          echo "=== Step 3: Running spotless check ==="
+          mvn -B --errors spotless:check || true
+
+          echo "=== Step 4: Running jacoco coverage ==="
+          mvn -B -pl jdbc-core test -Dtest=NoSuchTest -DfailIfNoTests=false jacoco:report -Ddependency-check.skip=true || true
+
+          echo "=== Step 5: Running integration test compilation ==="
+          mvn -B -pl jdbc-core compile test-compile -Ddependency-check.skip=true || true
 
           echo "Dependency resolution complete"
 
