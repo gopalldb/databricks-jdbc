@@ -134,10 +134,11 @@ jobs:
           echo "Resolving Maven dependencies and plugins..."
           mvn -B dependency:resolve dependency:resolve-plugins -DincludeScope=test
 
-          # Also run compile to trigger build-time downloads
-          # (spotless formatters, annotation processors, etc.)
-          echo "Running compile to trigger build-time downloads..."
-          mvn -B compile -DskipTests -Dmaven.javadoc.skip=true -Dmaven.source.skip=true || true
+          # Install all modules so inter-module SNAPSHOTs (e.g., jdbc-core used by
+          # assembly-thin/uber) are in ~/.m2/repository. This also triggers build-time
+          # downloads (spotless formatters, annotation processors, etc.)
+          echo "Installing all modules to resolve inter-module dependencies..."
+          mvn -B install -DskipTests -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Ddependency-check.skip=true
 
           echo "Dependency resolution complete"
 
