@@ -29,12 +29,13 @@ permissions:
 
 jobs:
   warm-cache:
-    strategy:
-      matrix:
-        github-runner: [linux-ubuntu-latest, windows-server-latest]
+    # Run on Linux only. Maven repository contents (JARs/POMs) are platform-independent.
+    # Windows forked PRs restore this same cache via the restore-keys prefix match.
+    # Note: Windows runners in databricks-protected-runner-group lack bash, which
+    # is required for the OIDC token exchange scripts.
     runs-on:
       group: databricks-protected-runner-group
-      labels: ${{ matrix.github-runner }}
+      labels: linux-ubuntu-latest
 
     steps:
       - name: Set up JDK
@@ -144,4 +145,4 @@ jobs:
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-deps-${{ hashFiles('**/pom.xml') }}
+          key: maven-deps-${{ hashFiles('**/pom.xml') }}

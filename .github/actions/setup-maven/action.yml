@@ -18,8 +18,8 @@ runs:
       uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-deps-${{ hashFiles('**/pom.xml') }}
-        restore-keys: ${{ runner.os }}-maven-deps-
+        key: maven-deps-${{ hashFiles('**/pom.xml') }}
+        restore-keys: maven-deps-
 
     - name: Configure Maven without credentials (fork)
       if: inputs.is-fork == 'true'
@@ -106,5 +106,5 @@ runs:
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ~/.m2
-        key: ${{ runner.os }}-maven-deps-${{ hashFiles('**/pom.xml') }}
-        restore-keys: ${{ runner.os }}-maven-deps-
+        key: maven-deps-${{ hashFiles('**/pom.xml') }}
+        restore-keys: maven-deps-
