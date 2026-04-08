@@ -160,15 +160,18 @@ jobs:
 
           echo "Dependency resolution complete"
 
-      - name: Remove _remote.repositories before saving cache
+      - name: Normalize _remote.repositories before saving cache
         shell: bash
         run: |
-          # Remove _remote.repositories marker files before saving. These track
-          # which remote repo ID each artifact was downloaded from (jfrog-central).
-          # Without them, forked PRs can use the cache in offline mode without
-          # Maven complaining about repo ID mismatches.
-          COUNT=$(find ~/.m2/repository -name '_remote.repositories' -delete -print | wc -l)
-          echo "Removed ${COUNT} _remote.repositories markers"
+          # Replace 'jfrog-central' with 'central' in _remote.repositories files.
+          # These files track which repo ID each artifact was downloaded from. The
+          # cache warmer downloads from 'jfrog-central' (the JFrog mirror), but
+          # Maven's offline mode expects artifacts to be associated with 'central'
+          # (the default Maven Central repo ID). Without this, offline mode refuses
+          # cached artifacts with "has not been downloaded from it before".
+          COUNT=$(find ~/.m2/repository -name '_remote.repositories' -print | wc -l)
+          find ~/.m2/repository -name '_remote.repositories' -exec sed -i 's/jfrog-central/central/g' {} \;
+          echo "Normalized ${COUNT} _remote.repositories markers (jfrog-central -> central)"
 
       - name: Save Maven dependency cache
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4

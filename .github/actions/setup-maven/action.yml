@@ -27,18 +27,10 @@ runs:
       run: |
         mkdir -p ~/.m2
 
-        # Remove _remote.repositories marker files. These track which remote
-        # repo each artifact came from. Without them, Maven treats all cached
-        # artifacts as locally installed and resolves them without contacting
-        # any remote server.
-        find ~/.m2/repository -name '_remote.repositories' -delete 2>/dev/null || true
-        echo "Removed _remote.repositories markers from cache"
-
-        # Enable Maven offline mode via .mvn/maven.config. This file is read
-        # automatically by Maven as default CLI arguments. Offline mode prevents
+        # Enable Maven offline mode via .mvn/maven.config. Offline mode prevents
         # all network requests — no JFrog auth needed, no Maven Central fallback.
-        # Combined with _remote.repositories removal, Maven resolves everything
-        # from the local cache.
+        # The cache warmer normalizes _remote.repositories to use 'central' as the
+        # repo ID, so offline mode accepts all cached artifacts.
         mkdir -p .mvn
         echo "-o" >> .mvn/maven.config
         echo "Maven offline mode enabled via .mvn/maven.config"
@@ -48,7 +40,7 @@ runs:
         <settings />
         SETTINGS_EOF
 
-        echo "Maven configured for forked PR (cache-only, no remote access)"
+        echo "Maven configured for forked PR (offline mode, cache-only)"
 
     # --- Same-repo path: full JFrog OIDC authentication ---
     - name: Get JFrog OIDC token
