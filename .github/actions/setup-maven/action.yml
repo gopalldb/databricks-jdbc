@@ -26,17 +26,16 @@ runs:
       shell: bash
       run: |
         mkdir -p ~/.m2
-        # Point the mirror to the local Maven repo. This forces Maven to resolve
-        # everything from ~/.m2/repository (the restored cache) without contacting
-        # any remote server. No network requests = no 401 errors.
-        # A file:// mirror effectively makes Maven work in offline mode while
-        # still honoring the mirror configuration (no direct Maven Central access).
+        # Point the mirror to the local Maven repo with the SAME ID (jfrog-central)
+        # used by the cache warmer. Maven tracks which repo ID cached each artifact —
+        # a mismatched ID causes re-verification attempts that fail on file:// URLs.
+        # This forces Maven to resolve from ~/.m2/repository with no network requests.
         LOCAL_REPO="$HOME/.m2/repository"
         cat > ~/.m2/settings.xml << SETTINGS_EOF
         <settings>
           <mirrors>
             <mirror>
-              <id>local-cache</id>
+              <id>jfrog-central</id>
               <mirrorOf>*</mirrorOf>
               <url>file://${LOCAL_REPO}</url>
             </mirror>
