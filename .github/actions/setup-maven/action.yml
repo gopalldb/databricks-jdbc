@@ -107,9 +107,13 @@ runs:
 
         echo "Maven configured to use JFrog registry"
 
-    - name: Cache Maven packages
+    # Restore-only for non-fork path. Only the warmMavenCache workflow should
+    # save the cache (it strips _remote.repositories before saving). If PR
+    # workflows also save, they create dirty cache entries with repo ID markers
+    # that break offline mode for forked PRs.
+    - name: Restore Maven cache
       if: inputs.is-fork == 'false'
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ~/.m2
         key: maven-deps-${{ hashFiles('**/pom.xml') }}
