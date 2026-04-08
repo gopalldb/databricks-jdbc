@@ -27,19 +27,28 @@ runs:
       run: |
         mkdir -p ~/.m2
 
-        # Remove _remote.repositories marker files from the cache. These files
-        # track which remote repository each artifact was downloaded from. When
-        # present, Maven tries to re-verify artifacts against the remote — which
-        # fails without credentials. Removing them makes Maven treat all cached
-        # artifacts as locally installed, requiring no remote verification.
+        # Step 1: Remove _remote.repositories marker files. These track which
+        # remote repo each artifact came from. Without them, Maven won't try
+        # to re-verify artifacts against a remote server.
         find ~/.m2/repository -name '_remote.repositories' -delete 2>/dev/null || true
         echo "Removed _remote.repositories markers from cache"
 
-        # Empty settings.xml — no mirrors, no servers, no repositories.
-        # With _remote.repositories removed, Maven resolves everything from
-        # the local cache without contacting any remote server.
-        cat > ~/.m2/settings.xml << 'SETTINGS_EOF'
-        <settings />
+        # Step 2: Configure a file:// mirror that intercepts all remote requests.
+        # This prevents Maven from falling back to Maven Central for any artifact
+        # it thinks is missing. The mirror points to the local repo itself, so
+        # Maven finds artifacts locally. Uses the same ID (jfrog-central) as the
+        # cache warmer to maintain consistency.
+        LOCAL_REPO="$HOME/.m2/repository"
+        cat > ~/.m2/settings.xml << SETTINGS_EOF
+        <settings>
+          <mirrors>
+            <mirror>
+              <id>jfrog-central</id>
+              <mirrorOf>*</mirrorOf>
+              <url>file://${LOCAL_REPO}</url>
+            </mirror>
+          </mirrors>
+        </settings>
         SETTINGS_EOF
 
         echo "Maven configured for forked PR (cache-only, no remote access)"
