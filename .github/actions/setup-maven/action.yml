@@ -27,28 +27,25 @@ runs:
       run: |
         mkdir -p ~/.m2
 
-        # Step 1: Remove _remote.repositories marker files. These track which
-        # remote repo each artifact came from. Without them, Maven won't try
-        # to re-verify artifacts against a remote server.
+        # Remove _remote.repositories marker files. These track which remote
+        # repo each artifact came from. Without them, Maven treats all cached
+        # artifacts as locally installed and resolves them without contacting
+        # any remote server.
         find ~/.m2/repository -name '_remote.repositories' -delete 2>/dev/null || true
         echo "Removed _remote.repositories markers from cache"
 
-        # Step 2: Configure a file:// mirror that intercepts all remote requests.
-        # This prevents Maven from falling back to Maven Central for any artifact
-        # it thinks is missing. The mirror points to the local repo itself, so
-        # Maven finds artifacts locally. Uses the same ID (jfrog-central) as the
-        # cache warmer to maintain consistency.
-        LOCAL_REPO="$HOME/.m2/repository"
-        cat > ~/.m2/settings.xml << SETTINGS_EOF
-        <settings>
-          <mirrors>
-            <mirror>
-              <id>jfrog-central</id>
-              <mirrorOf>*</mirrorOf>
-              <url>file://${LOCAL_REPO}</url>
-            </mirror>
-          </mirrors>
-        </settings>
+        # Enable Maven offline mode via .mvn/maven.config. This file is read
+        # automatically by Maven as default CLI arguments. Offline mode prevents
+        # all network requests — no JFrog auth needed, no Maven Central fallback.
+        # Combined with _remote.repositories removal, Maven resolves everything
+        # from the local cache.
+        mkdir -p .mvn
+        echo "-o" >> .mvn/maven.config
+        echo "Maven offline mode enabled via .mvn/maven.config"
+
+        # Empty settings — no mirrors needed in offline mode.
+        cat > ~/.m2/settings.xml << 'SETTINGS_EOF'
+        <settings />
         SETTINGS_EOF
 
         echo "Maven configured for forked PR (cache-only, no remote access)"
