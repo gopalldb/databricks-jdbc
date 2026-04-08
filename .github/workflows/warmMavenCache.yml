@@ -131,15 +131,28 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Install all modules — this resolves all external dependencies from JFrog,
-          # installs inter-module SNAPSHOTs (e.g., jdbc-core used by assembly-thin/uber)
-          # into ~/.m2/repository, and triggers build-time downloads (spotless formatters,
-          # annotation processors, etc.).
-          #
-          # Note: dependency:resolve cannot be used here because it fails when trying
-          # to resolve inter-module SNAPSHOTs that don't exist in JFrog.
-          echo "Installing all modules to populate dependency cache..."
+          # Step 1: Install all modules — resolves external dependencies from JFrog and
+          # installs inter-module SNAPSHOTs (e.g., jdbc-core used by assembly-thin/uber).
+          echo "=== Step 1: Installing all modules ==="
           mvn -B install -DskipTests -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Ddependency-check.skip=true
+
+          # Step 2: Run the exact same commands that PR workflows use.
+          # This ensures ALL plugins, providers, and metadata are resolved and cached,
+          # including test-time artifacts (surefire-junit-platform, jacoco agent) and
+          # build-time plugins (spotless, toolchains, owasp) that mvn install alone
+          # doesn't trigger.
+
+          echo "=== Step 2: Running unit test compilation + surefire resolution ==="
+          mvn -B -pl jdbc-core test -Dtest=NoSuchTest -DfailIfNoTests=false -Ddependency-check.skip=true || true
+
+          echo "=== Step 3: Running spotless check ==="
+          mvn -B --errors spotless:check || true
+
+          echo "=== Step 4: Running jacoco coverage ==="
+          mvn -B -pl jdbc-core test -Dtest=NoSuchTest -DfailIfNoTests=false jacoco:report -Ddependency-check.skip=true || true
+
+          echo "=== Step 5: Running integration test compilation ==="
+          mvn -B -pl jdbc-core compile test-compile -Ddependency-check.skip=true || true
 
           echo "Dependency resolution complete"
 
