@@ -131,15 +131,21 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Install all modules — this resolves all external dependencies from JFrog,
-          # installs inter-module SNAPSHOTs (e.g., jdbc-core used by assembly-thin/uber)
-          # into ~/.m2/repository, and triggers build-time downloads (spotless formatters,
-          # annotation processors, etc.).
-          #
-          # Note: dependency:resolve cannot be used here because it fails when trying
-          # to resolve inter-module SNAPSHOTs that don't exist in JFrog.
+          # Step 1: Install all modules — resolves external dependencies from JFrog and
+          # installs inter-module SNAPSHOTs (e.g., jdbc-core used by assembly-thin/uber).
           echo "Installing all modules to populate dependency cache..."
           mvn -B install -DskipTests -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Ddependency-check.skip=true
+
+          # Step 2: Resolve all plugins across all profiles. Some plugins (e.g.,
+          # maven-toolchains-plugin, spotless, jacoco) are only resolved when specific
+          # goals or profiles are active. This ensures they're in the cache.
+          echo "Resolving plugins across all profiles..."
+          mvn -B dependency:resolve-plugins -pl jdbc-core || true
+
+          # Step 3: Trigger spotless and jacoco plugin downloads (used in PR checks).
+          echo "Triggering spotless and jacoco plugin downloads..."
+          mvn -B spotless:check -pl jdbc-core -Dspotless.check.skip=false 2>/dev/null || true
+          mvn -B jacoco:prepare-agent -pl jdbc-core 2>/dev/null || true
 
           echo "Dependency resolution complete"
 
