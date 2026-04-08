@@ -26,7 +26,6 @@ permissions:
   id-token: write
   contents: read
   pull-requests: read # Needed to read PR metadata for fork checkout
-  actions: write # Needed to delete stale cache entries
 
 jobs:
   warm-cache:
@@ -146,81 +145,3 @@ jobs:
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-deps-${{ hashFiles('**/pom.xml') }}
-
-  # After warming the cache on main (push trigger), clean up stale cache entries
-  # from previous pom.xml versions. This prevents old dependency versions from
-  # occupying cache space after a newer version merges to main.
-  #
-  # Cache lifecycle:
-  #   - Each unique pom.xml hash gets its own cache entry (content-addressable)
-  #   - Multiple concurrent PRs with different pom.xml changes coexist in cache
-  #   - When a PR merges to main, this job deletes cache entries that don't match
-  #     main's current pom.xml hash, freeing space from stale PR dependency versions
-  #   - GitHub also auto-evicts caches not accessed in 7 days (LRU)
-  cleanup-stale-caches:
-    if: github.event_name == 'push'
-    needs: warm-cache
-    runs-on:
-      group: databricks-protected-runner-group
-      labels: linux-ubuntu-latest
-    steps:
-      - name: Checkout (to compute current pom.xml hash)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Delete stale maven-deps caches
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-
-          echo "Listing all maven-deps cache entries..."
-
-          # Get the current cache key suffix (the pom.xml hash that warm-cache just saved).
-          # We use the GitHub API to list caches and keep only entries matching main's hash.
-          # The key format is: {OS}-maven-deps-{hash}
-
-          # List all maven-deps cache entries as JSON
-          CACHES=$(gh cache list --repo "${{ github.repository }}" --limit 200 \
-            --json id,key,createdAt 2>/dev/null || echo "[]")
-
-          if [ "$CACHES" = "[]" ] || [ -z "$CACHES" ]; then
-            echo "No cache entries found"
-            exit 0
-          fi
-
-          # Find the keys that were just saved by warm-cache (created in the last hour).
-          # These represent main's current pom.xml hash — everything else is stale.
-          FRESH_SUFFIX=$(echo "$CACHES" | jq -r '
-            [.[] | select(.key | test("maven-deps-"))]
-            | sort_by(.createdAt) | reverse
-            | .[0].key
-            | capture("maven-deps-(?<hash>.+)").hash // empty
-          ')
-
-          if [ -z "$FRESH_SUFFIX" ]; then
-            echo "Could not determine current pom.xml hash from cache keys"
-            exit 0
-          fi
-
-          echo "Current pom.xml hash (from latest cache): ${FRESH_SUFFIX}"
-
-          # Delete all maven-deps entries that don't match the current hash
-          DELETED=0
-          KEPT=0
-
-          echo "$CACHES" | jq -c '.[] | select(.key | test("maven-deps-"))' | while read -r ENTRY; do
-            CACHE_ID=$(echo "$ENTRY" | jq -r '.id')
-            CACHE_KEY=$(echo "$ENTRY" | jq -r '.key')
-
-            if echo "$CACHE_KEY" | grep -q "$FRESH_SUFFIX"; then
-              echo "KEEP: ${CACHE_KEY}"
-              KEPT=$((KEPT + 1))
-            else
-              echo "DELETE: ${CACHE_KEY} (stale)"
-              gh cache delete "$CACHE_ID" --repo "${{ github.repository }}" 2>/dev/null || true
-              DELETED=$((DELETED + 1))
-            fi
-          done
-
-          echo "Cleanup complete"
