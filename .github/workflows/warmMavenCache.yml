@@ -133,24 +133,24 @@ jobs:
 
           # Step 1: Install all modules — resolves external dependencies from JFrog and
           # installs inter-module SNAPSHOTs (e.g., jdbc-core used by assembly-thin/uber).
-          echo "=== Step 1: Installing all modules ==="
-          mvn -B install -DskipTests -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Ddependency-check.skip=true
+          # Use 'clean' in every step to match the CI commands exactly.
+          # This ensures maven-clean-plugin and all lifecycle-bound plugins
+          # (exec-maven-plugin, etc.) are resolved and cached.
 
-          # Step 2: Run a real unit test to trigger full surefire provider resolution.
-          # surefire-junit-platform is resolved lazily at test execution time, not at
-          # plugin initialization. We need at least one test to actually run.
+          echo "=== Step 1: Installing all modules ==="
+          mvn -B clean install -DskipTests -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Ddependency-check.skip=true
+
           echo "=== Step 2: Running a single unit test to resolve surefire provider ==="
-          mvn -B -pl jdbc-core test -Dtest="DatabricksParameterMetaDataTest#testInitialization" -Ddependency-check.skip=true || true
+          mvn -B -pl jdbc-core clean test -Dtest="DatabricksParameterMetaDataTest#testInitialization" -Ddependency-check.skip=true || true
 
           echo "=== Step 3: Running spotless check ==="
           mvn -B --errors spotless:check || true
 
-          # Step 4: Run jacoco with a real test to resolve jacoco agent + report plugins
           echo "=== Step 4: Running jacoco coverage ==="
-          mvn -B -pl jdbc-core test -Dtest="DatabricksParameterMetaDataTest#testInitialization" jacoco:report -Ddependency-check.skip=true || true
+          mvn -B -pl jdbc-core clean test -Dtest="DatabricksParameterMetaDataTest#testInitialization" jacoco:report -Ddependency-check.skip=true || true
 
           echo "=== Step 5: Running integration test compilation ==="
-          mvn -B -pl jdbc-core compile test-compile -Ddependency-check.skip=true || true
+          mvn -B -pl jdbc-core clean compile test-compile -Ddependency-check.skip=true || true
 
           echo "Dependency resolution complete"
 
