@@ -445,6 +445,16 @@ public class DatabricksConnectionTest {
             connection.prepareCall(
                 SQL, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE));
 
+    // prepareCall with valid holdability should succeed
+    CallableStatement callableStmt3 =
+        connection.prepareCall(
+            SQL,
+            ResultSet.TYPE_FORWARD_ONLY,
+            ResultSet.CONCUR_READ_ONLY,
+            ResultSet.CLOSE_CURSORS_AT_COMMIT);
+    assertNotNull(callableStmt3);
+    callableStmt3.close();
+
     // prepareCall with unsupported holdability should throw
     assertThrows(
         DatabricksSQLFeatureNotSupportedException.class,
@@ -454,6 +464,11 @@ public class DatabricksConnectionTest {
                 ResultSet.TYPE_FORWARD_ONLY,
                 ResultSet.CONCUR_READ_ONLY,
                 ResultSet.HOLD_CURSORS_OVER_COMMIT));
+
+    // getMetaData, beginRequest, endRequest
+    assertNotNull(connection.getMetaData());
+    assertDoesNotThrow(connection::beginRequest);
+    assertDoesNotThrow(connection::endRequest);
 
     assertThrows(DatabricksSQLFeatureNotSupportedException.class, () -> connection.nativeSQL(SQL));
     assertThrows(

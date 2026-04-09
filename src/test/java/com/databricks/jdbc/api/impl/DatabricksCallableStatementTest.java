@@ -683,6 +683,22 @@ public class DatabricksCallableStatementTest {
           DatabricksSQLFeatureNotSupportedException.class,
           () -> stmt.setNClob("p", new StringReader("")));
 
+      // Typed object overloads (Blob, Clob, NClob, SQLXML, RowId, URL)
+      assertThrows(
+          DatabricksSQLFeatureNotSupportedException.class,
+          () -> stmt.setURL("p", (java.net.URL) null));
+      assertThrows(
+          DatabricksSQLFeatureNotSupportedException.class, () -> stmt.setRowId("p", (RowId) null));
+      assertThrows(
+          DatabricksSQLFeatureNotSupportedException.class, () -> stmt.setNClob("p", (NClob) null));
+      assertThrows(
+          DatabricksSQLFeatureNotSupportedException.class,
+          () -> stmt.setSQLXML("p", (SQLXML) null));
+      assertThrows(
+          DatabricksSQLFeatureNotSupportedException.class, () -> stmt.setBlob("p", (Blob) null));
+      assertThrows(
+          DatabricksSQLFeatureNotSupportedException.class, () -> stmt.setClob("p", (Clob) null));
+
       // SQLType-based overrides (Java 8+)
       assertThrows(
           DatabricksSQLFeatureNotSupportedException.class,
