@@ -4,6 +4,7 @@ import static com.databricks.jdbc.TestConstants.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.databricks.jdbc.api.internal.IDatabricksConnectionContext;
@@ -42,10 +43,22 @@ public class DatabricksCallableStatementTest {
   @Mock DatabricksResultSet resultSet;
   @Mock DatabricksSdkClient client;
 
+  private static final String WAREHOUSE_ID_VALUE = "99999999";
+  private static final ImmutableSessionInfo SESSION_INFO =
+      ImmutableSessionInfo.builder()
+          .computeResource(new Warehouse(WAREHOUSE_ID_VALUE))
+          .sessionId("test-session-id")
+          .build();
+
   private DatabricksConnection createConnection() throws Exception {
     IDatabricksConnectionContext ctx =
         DatabricksConnectionContext.parse(JDBC_URL, new Properties());
-    return new DatabricksConnection(ctx, client);
+    lenient()
+        .when(client.createSession(any(Warehouse.class), any(), any(), any(java.util.Map.class)))
+        .thenReturn(SESSION_INFO);
+    DatabricksConnection conn = new DatabricksConnection(ctx, client);
+    conn.open();
+    return conn;
   }
 
   // ===========================================================================
@@ -140,8 +153,17 @@ public class DatabricksCallableStatementTest {
     }
 
     @Test
+    @DisplayName("prepareCall on closed connection throws for 1-arg overload")
+    void testPrepareCallOnClosedConnectionThrows1Arg() throws Exception {
+      DatabricksConnection connection = createConnection();
+      connection.close();
+
+      assertThrows(DatabricksSQLException.class, () -> connection.prepareCall(CALL_SQL));
+    }
+
+    @Test
     @DisplayName("prepareCall on closed connection throws for 3-arg overload")
-    void testPrepareCallOnClosedConnectionThrows() throws Exception {
+    void testPrepareCallOnClosedConnectionThrows3Arg() throws Exception {
       DatabricksConnection connection = createConnection();
       connection.close();
 
@@ -246,21 +268,10 @@ public class DatabricksCallableStatementTest {
       DatabricksConnection connection = createConnection();
       DatabricksCallableStatement stmt = new DatabricksCallableStatement(connection, CALL_SQL);
 
-      stmt.setInt(1, 42);
-      stmt.setString(2, "test");
-
-      when(client.executeStatement(
-              eq(CALL_SQL_AS_EXECUTED),
-              eq(new Warehouse(WAREHOUSE_ID)),
-              any(HashMap.class),
-              eq(StatementType.UPDATE),
-              any(IDatabricksSession.class),
-              eq(stmt),
-              any()))
-          .thenReturn(resultSet);
-
-      // shouldReturnResultSet is true, so executeUpdate throws
-      assertThrows(DatabricksSQLException.class, stmt::executeUpdate);
+      // executeUpdate is explicitly not supported for callable statements
+      DatabricksSQLFeatureNotSupportedException ex =
+          assertThrows(DatabricksSQLFeatureNotSupportedException.class, stmt::executeUpdate);
+      assertTrue(ex.getMessage().contains("execute()"));
       stmt.close();
     }
 

@@ -106,6 +106,7 @@ public class DatabricksConnection implements IDatabricksConnection, IDatabricksC
   @Override
   public CallableStatement prepareCall(String sql) throws SQLException {
     LOGGER.debug(String.format("public CallableStatement prepareCall(String sql = {%s})", sql));
+    throwExceptionIfConnectionIsClosed();
     DatabricksCallableStatement statement = new DatabricksCallableStatement(this, sql);
     statementSet.add(statement);
     return statement;

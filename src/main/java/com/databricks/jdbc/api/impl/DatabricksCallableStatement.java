@@ -62,35 +62,47 @@ public class DatabricksCallableStatement extends DatabricksPreparedStatement
 
   public DatabricksCallableStatement(DatabricksConnection connection, String sql)
       throws SQLException {
-    // Convert {call proc(?)} to CALL proc(?) before passing to parent so that:
-    // 1. The parent's shouldReturnResultSet matches CALL_PATTERN correctly
-    // 2. The conversion is independent of the escapeProcessing flag
-    // 3. Other JDBC escape sequences ({d ...}, {fn ...}, etc.) remain controlled
-    //    by setEscapeProcessing as usual
-    super(connection, convertCallEscapeSyntax(sql));
-    validateNoReturnValueSyntax(sql);
+    // Validate and convert before super() to avoid partially initializing the parent
+    // when the SQL is invalid (e.g., {? = call ...} return-value syntax).
+    super(connection, validateAndConvert(sql));
     LOGGER.debug("Created DatabricksCallableStatement for SQL: {}", sql);
   }
 
   /**
-   * Converts JDBC callable escape syntax {@code {call proc(?, ?)}} to native {@code CALL proc(?,
-   * ?)}. This is done unconditionally (not gated by escapeProcessing) because the {@code {call
-   * ...}} form is specific to callable statements and must always be resolved. Other JDBC escape
-   * sequences are handled independently by the standard escape processing path.
+   * Validates the SQL and converts JDBC callable escape syntax before passing to the parent
+   * constructor. Validation runs first so that invalid SQL (e.g., {@code {? = call ...}}) is
+   * rejected before any parent initialization occurs.
+   *
+   * <p>The {@code {call proc(?)}} → {@code CALL proc(?)} conversion is done unconditionally (not
+   * gated by escapeProcessing) because the {@code {call ...}} form is specific to callable
+   * statements and must always be resolved.
    */
-  private static String convertCallEscapeSyntax(String sql) {
+  private static String validateAndConvert(String sql) throws SQLException {
+    if (sql != null && RETURN_VALUE_SYNTAX.matcher(sql).find()) {
+      throw new DatabricksSQLFeatureNotSupportedException(
+          "Return value syntax {? = call ...} is not supported. "
+              + "Use {call proc(...)} and retrieve results via the ResultSet.");
+    }
     if (sql == null) {
       return null;
     }
     return CALL_ESCAPE_SYNTAX.matcher(sql).replaceAll("CALL $1");
   }
 
-  private void validateNoReturnValueSyntax(String sql) throws SQLException {
-    if (sql != null && RETURN_VALUE_SYNTAX.matcher(sql).find()) {
-      throw new DatabricksSQLFeatureNotSupportedException(
-          "Return value syntax {? = call ...} is not supported. "
-              + "Use {call proc(...)} and retrieve results via the ResultSet.");
-    }
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Callable statements always set {@code shouldReturnResultSet = true} because stored
+   * procedures may return result sets. Use {@link #execute()} for DML procedures and check {@link
+   * #getUpdateCount()} afterward.
+   */
+  @Override
+  public int executeUpdate() throws SQLException {
+    LOGGER.debug("public int executeUpdate()");
+    throw new DatabricksSQLFeatureNotSupportedException(
+        "executeUpdate() is not supported for callable statements because stored procedures "
+            + "may return result sets. Use execute() instead, then call getUpdateCount() to "
+            + "retrieve the update count for DML procedures.");
   }
 
   /**
