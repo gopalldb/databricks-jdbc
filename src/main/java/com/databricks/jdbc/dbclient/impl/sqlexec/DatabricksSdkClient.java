@@ -318,11 +318,9 @@ public class DatabricksSdkClient implements IDatabricksClient {
       handleFailedExecution(response, statementId, sql);
     }
 
-    // Defer markAsClosed until AFTER ResultSet construction. VolumeOperationResult
-    // (created during ResultSet construction) accesses statement properties via
-    // isAllowedInputStreamForVolumeOperation() which calls checkIfClosed().
-    // Marking the statement closed before ResultSet construction causes volume
-    // operations to fail with "Statement is closed".
+    // Defer markDirectResultsReceived until AFTER ResultSet construction.
+    // VolumeOperationResult (created during ResultSet construction) accesses
+    // statement properties that require the statement to be in a valid state.
     boolean shouldMarkClosed = responseState == StatementState.CLOSED && parentStatement != null;
 
     DatabricksResultSet resultSet =
@@ -336,8 +334,10 @@ public class DatabricksSdkClient implements IDatabricksClient {
             parentStatement);
 
     if (shouldMarkClosed) {
-      LOGGER.debug("Statement {} returned CLOSED status, marking statement as closed", statementId);
-      ((DatabricksStatement) parentStatement.getStatement()).markAsClosed();
+      LOGGER.debug(
+          "Statement {} returned CLOSED status with direct results, marking as direct results received",
+          statementId);
+      ((DatabricksStatement) parentStatement.getStatement()).markDirectResultsReceived();
     }
 
     return resultSet;
