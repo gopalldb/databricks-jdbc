@@ -236,9 +236,14 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     LOGGER.debug("public void cancel()");
     checkIfClosed();
 
-    if (statementId != null) {
+    if (statementId != null && !directResultsReceived) {
       this.connection.getSession().getDatabricksClient().cancelStatement(statementId);
       DatabricksThreadContextHolder.clearStatementInfo();
+    } else if (directResultsReceived) {
+      LOGGER.debug(
+          "Skipping cancel for statement {} — direct results already received, "
+              + "server operation closed",
+          statementId);
     } else {
       warnings =
           WarningUtil.addWarning(
@@ -656,6 +661,18 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
   public ResultSet executeAsync(String sql) throws SQLException {
     LOGGER.debug("ResultSet executeAsync() for statement {%s}", sql);
     checkIfClosed();
+
+    // Reset state for new execution (same as executeInternal)
+    directResultsReceived = false;
+    if (resultSet != null) {
+      try {
+        resultSet.close();
+      } catch (SQLException e) {
+        LOGGER.debug("Failed to close previous result set during async re-execution", e);
+      }
+      resultSet = null;
+    }
+
     IDatabricksClient client = connection.getSession().getDatabricksClient();
     DatabricksThreadContextHolder.setStatementType(StatementType.SQL);
     return client.executeStatementAsync(
@@ -678,10 +695,16 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
 
     // For direct results, the server already closed the operation — making an RPC
     // would return "not found". Return the cached result set instead.
-    if (directResultsReceived && resultSet != null) {
-      LOGGER.debug(
-          "Returning cached result for statement {} (direct results received)", statementId);
-      return resultSet;
+    if (directResultsReceived) {
+      if (resultSet != null) {
+        LOGGER.debug(
+            "Returning cached result for statement {} (direct results received)", statementId);
+        return resultSet;
+      }
+      throw new DatabricksSQLException(
+          "Direct results were received but no result set is available. "
+              + "The server closed the operation and no further results can be fetched.",
+          DatabricksDriverErrorCode.INVALID_STATE);
     }
 
     return connection

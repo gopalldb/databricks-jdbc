@@ -877,6 +877,95 @@ public class DatabricksStatementTest {
   }
 
   @Test
+  public void testGetExecutionResultReturnsCachedResultForDirectResults() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    when(client.executeStatement(
+            eq(STATEMENT),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement),
+            any()))
+        .thenReturn(resultSet);
+
+    statement.executeQuery(STATEMENT);
+    // Simulate the SDK client setting statementId and marking direct results
+    statement.setStatementId(new StatementId("test-stmt-id"));
+    statement.markDirectResultsReceived();
+
+    // getExecutionResult should return cached result, not make an RPC
+    ResultSet cached = statement.getExecutionResult();
+    assertNotNull(cached);
+    assertEquals(resultSet, cached);
+
+    // Verify no call to getStatementResult (the RPC path)
+    verify(client, never())
+        .getStatementResult(any(StatementId.class), any(IDatabricksSession.class), any());
+  }
+
+  @Test
+  public void testCancelAfterDirectResultsIsNoOp() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    when(client.executeStatement(
+            eq(STATEMENT),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement),
+            any()))
+        .thenReturn(resultSet);
+
+    statement.executeQuery(STATEMENT);
+    statement.markDirectResultsReceived();
+
+    // cancel() should be a no-op — server already closed the operation
+    assertDoesNotThrow(() -> statement.cancel());
+    verify(client, never()).cancelStatement(any(StatementId.class));
+  }
+
+  @Test
+  public void testReExecutionClosesPreviousResultSet() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    DatabricksResultSet firstResult = mock(DatabricksResultSet.class);
+    DatabricksResultSet secondResult = mock(DatabricksResultSet.class);
+
+    when(client.executeStatement(
+            eq(STATEMENT),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement),
+            any()))
+        .thenReturn(firstResult)
+        .thenReturn(secondResult);
+
+    // First execution
+    statement.executeQuery(STATEMENT);
+    statement.markDirectResultsReceived();
+
+    // Second execution — should close the first result set
+    statement.executeQuery(STATEMENT);
+
+    verify(firstResult, times(1)).close();
+    assertEquals(secondResult, statement.getResultSet());
+  }
+
+  @Test
   public void testRemoveEmptyEscapeClauseFromQuery() throws Exception {
     IDatabricksConnectionContext connectionContext =
         DatabricksConnectionContext.parse(JDBC_URL, new Properties());
