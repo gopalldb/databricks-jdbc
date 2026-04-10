@@ -5,6 +5,7 @@ import static com.databricks.jdbc.common.EnvironmentVariables.*;
 import static com.databricks.jdbc.common.util.DatabricksThriftUtil.*;
 
 import com.databricks.jdbc.api.impl.*;
+import com.databricks.jdbc.api.impl.DatabricksStatement;
 import com.databricks.jdbc.api.internal.IDatabricksConnectionContext;
 import com.databricks.jdbc.api.internal.IDatabricksSession;
 import com.databricks.jdbc.api.internal.IDatabricksStatementInternal;
@@ -233,7 +234,8 @@ final class DatabricksThriftAccessor {
       TGetOperationStatusResp statusResp =
           pollTillOperationFinished(
               response, parentStatement, session, statementId, sessionDebugInfo);
-      if (hasResultDataInDirectResults(response)) {
+      boolean isDirectResults = hasResultDataInDirectResults(response);
+      if (isDirectResults) {
         // The first response has result data
         // There is no polling in this case as status was already finished
         resultSet = response.getDirectResults().getResultSet();
@@ -257,13 +259,29 @@ final class DatabricksThriftAccessor {
                 "Connection [%s] Statement [%s] Session [%s] Thrift fetch latency: %dms",
                 connectionUuid, statementId, sessionDebugInfo, fetchLatencyMillis));
       }
-      return new DatabricksResultSet(
-          getStatementStatus(statusResp),
-          statementId,
-          resultSet,
-          statementType,
-          parentStatement,
-          session);
+
+      DatabricksResultSet databricksResultSet =
+          new DatabricksResultSet(
+              getStatementStatus(statusResp),
+              statementId,
+              resultSet,
+              statementType,
+              parentStatement,
+              session);
+
+      // For direct results, the server operation is already complete — no further
+      // RPCs (getOperationStatus, FetchResults, closeOperation) will succeed for
+      // this operation handle. Mark the statement so close() skips the server call.
+      if (isDirectResults
+          && parentStatement != null
+          && parentStatement.getStatement() instanceof DatabricksStatement) {
+        LOGGER.debug(
+            "Statement {} received direct results via Thrift, marking as direct results received",
+            statementId);
+        ((DatabricksStatement) parentStatement.getStatement()).markDirectResultsReceived();
+      }
+
+      return databricksResultSet;
     } catch (TException e) {
       String errorMessage =
           String.format(
