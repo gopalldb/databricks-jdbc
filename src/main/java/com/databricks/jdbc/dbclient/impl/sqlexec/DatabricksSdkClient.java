@@ -388,30 +388,19 @@ public class DatabricksSdkClient implements IDatabricksClient {
     if (parentStatement != null) {
       parentStatement.setStatementId(typedStatementId);
     }
-    StatementState responseState = response.getStatus().getState();
-    LOGGER.debug("Executed sql [{}] with status [{}]", sql, responseState);
+    LOGGER.debug("Executed sql [{}] with status [{}]", sql, response.getStatus().getState());
 
-    DatabricksResultSet resultSet =
-        new DatabricksResultSet(
-            response.getStatus(),
-            typedStatementId,
-            response.getResult(),
-            response.getManifest(),
-            statementType,
-            session,
-            parentStatement);
-
-    // Even in async mode, the server may complete instantly and return CLOSED with
-    // inline results (especially for fast queries). Mark the statement so that
-    // getExecutionResult() returns the cached result instead of making an RPC.
-    if (responseState == StatementState.CLOSED
-        && parentStatement != null
-        && parentStatement.getStatement() instanceof DatabricksStatement) {
-      LOGGER.debug("Async statement {} returned CLOSED status with direct results", statementId);
-      ((DatabricksStatement) parentStatement.getStatement()).markDirectResultsReceived();
-    }
-
-    return resultSet;
+    // SEA async execution never returns direct results — the server always returns
+    // PENDING/RUNNING state, and the client polls via getStatementResult(). No need
+    // to check for CLOSED state or call markDirectResultsReceived() here.
+    return new DatabricksResultSet(
+        response.getStatus(),
+        typedStatementId,
+        response.getResult(),
+        response.getManifest(),
+        statementType,
+        session,
+        parentStatement);
   }
 
   @Override

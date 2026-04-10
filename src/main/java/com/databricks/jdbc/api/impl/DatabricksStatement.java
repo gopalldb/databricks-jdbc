@@ -662,7 +662,8 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     LOGGER.debug("ResultSet executeAsync() for statement {%s}", sql);
     checkIfClosed();
 
-    // Reset state for new execution (same as executeInternal)
+    // Reset state for new execution — a previous sync execute() may have set
+    // directResultsReceived, which must be cleared before the new async execution
     directResultsReceived = false;
     if (resultSet != null) {
       try {
