@@ -153,6 +153,11 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
         // The operation handle is gone on the server side, so closeStatement would fail.
         if (!directResultsReceived) {
           this.connection.getSession().getDatabricksClient().closeStatement(statementId);
+        } else {
+          LOGGER.info(
+              "Statement {} closed locally (direct results — server operation already closed, "
+                  + "skipping closeStatement RPC)",
+              statementId);
         }
         if (resultSet != null) {
           this.resultSet.close();
@@ -942,8 +947,9 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
    *   <li>The statement can be re-executed (flag resets in {@link #executeInternal})
    * </ul>
    */
+  @Override
   public void markDirectResultsReceived() {
-    LOGGER.debug("Statement {} received direct results (server closed operation)", statementId);
+    LOGGER.info("Statement {} received direct results (server closed operation)", statementId);
     this.directResultsReceived = true;
   }
 
