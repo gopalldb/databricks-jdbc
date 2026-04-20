@@ -1005,14 +1005,14 @@ public class DatabricksStatementTest {
   }
 
   @Test
-  public void testReExecutionClosesServerHandle() throws Exception {
+  public void testReExecutionNullsStatementIdAndClosesPreviousResultSet() throws Exception {
     IDatabricksConnectionContext connectionContext =
         DatabricksConnectionContext.parse(JDBC_URL, new Properties());
     DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
     DatabricksStatement statement = new DatabricksStatement(connection);
 
-    StatementId firstStmtId = new StatementId("first-stmt");
-    StatementId secondStmtId = new StatementId("second-stmt");
+    DatabricksResultSet firstResult = mock(DatabricksResultSet.class);
+    DatabricksResultSet secondResult = mock(DatabricksResultSet.class);
 
     when(client.executeStatement(
             eq(STATEMENT),
@@ -1022,27 +1022,17 @@ public class DatabricksStatementTest {
             any(IDatabricksSession.class),
             eq(statement),
             any()))
-        .thenAnswer(
-            invocation -> {
-              // Simulate SDK setting statementId after execution
-              statement.setStatementId(firstStmtId);
-              return resultSet;
-            })
-        .thenAnswer(
-            invocation -> {
-              statement.setStatementId(secondStmtId);
-              return resultSet;
-            });
+        .thenReturn(firstResult)
+        .thenReturn(secondResult);
 
-    // First execution (non-direct-results)
-    statement.executeQuery(STATEMENT);
-    assertEquals(firstStmtId, statement.getStatementId());
-
-    // Second execution — should close the first server handle
+    // First execution
     statement.executeQuery(STATEMENT);
 
-    // The first statement's server handle should have been closed
-    verify(client, times(1)).closeStatement(firstStmtId);
+    // Second execution — previous ResultSet should be closed
+    statement.executeQuery(STATEMENT);
+
+    verify(firstResult, times(1)).close();
+    assertEquals(secondResult, statement.getResultSet());
   }
 
   @Test
