@@ -158,15 +158,15 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
           this.resultSet.close();
           this.resultSet = null;
         }
-
-        if (removeFromSession) {
-          this.connection.closeStatement(this);
-        }
-        DatabricksThreadContextHolder.clearStatementInfo();
       }
     } finally {
       // Always run cleanup even if resultSet.close() or closeStatement() throws.
-      // This ensures executor shutdown, state reset, and isClosed=true regardless.
+      // This ensures session removal, ThreadLocal clear, executor shutdown, state reset,
+      // and isClosed=true regardless of exceptions.
+      if (!isClosed && removeFromSession) {
+        this.connection.closeStatement(this);
+      }
+      DatabricksThreadContextHolder.clearStatementInfo();
       shutDownExecutor();
       this.updateCount = -1;
       this.isClosed = true;
