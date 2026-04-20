@@ -286,7 +286,11 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
 
   @Override
   public Boolean getDirectResultMode() {
-    return Objects.equals(getParameter(DatabricksJdbcUrlParams.DIRECT_RESULT), "1");
+    return Objects.equals(
+        getParameter(
+            DatabricksJdbcUrlParams.DIRECT_RESULT,
+            getParameter(DatabricksJdbcUrlParams.ENABLE_SQL_EXEC_DIRECT_RESULTS)),
+        "1");
   }
 
   public Cloud getCloud() throws DatabricksParsingException {
@@ -912,11 +916,6 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
   @Override
   public boolean isSqlExecHybridResultsEnabled() {
     return getParameter(DatabricksJdbcUrlParams.ENABLE_SQL_EXEC_HYBRID_RESULTS).equals("1");
-  }
-
-  @Override
-  public boolean isSqlExecDirectResultsEnabled() {
-    return getParameter(DatabricksJdbcUrlParams.ENABLE_SQL_EXEC_DIRECT_RESULTS).equals("1");
   }
 
   @Override

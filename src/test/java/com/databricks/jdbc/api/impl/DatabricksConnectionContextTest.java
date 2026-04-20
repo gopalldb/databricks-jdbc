@@ -813,7 +813,7 @@ class DatabricksConnectionContextTest {
     DatabricksConnectionContext connectionContext =
         (DatabricksConnectionContext)
             DatabricksConnectionContext.parse(TestConstants.VALID_URL_1, properties);
-    assertTrue(connectionContext.isSqlExecDirectResultsEnabled());
+    assertTrue(connectionContext.getDirectResultMode());
 
     // Test when EnableSQLExecDirectResults=1
     String urlWithDirectResults =
@@ -822,7 +822,7 @@ class DatabricksConnectionContextTest {
     connectionContext =
         (DatabricksConnectionContext)
             DatabricksConnectionContext.parse(urlWithDirectResults, properties);
-    assertTrue(connectionContext.isSqlExecDirectResultsEnabled());
+    assertTrue(connectionContext.getDirectResultMode());
 
     // Test when EnableSQLExecDirectResults=0
     String urlWithoutDirectResults =
@@ -831,7 +831,7 @@ class DatabricksConnectionContextTest {
     connectionContext =
         (DatabricksConnectionContext)
             DatabricksConnectionContext.parse(urlWithoutDirectResults, properties);
-    assertFalse(connectionContext.isSqlExecDirectResultsEnabled());
+    assertFalse(connectionContext.getDirectResultMode());
   }
 
   @Test
@@ -1356,5 +1356,22 @@ class DatabricksConnectionContextTest {
         DatabricksConnectionContext.parse(
             TestConstants.VALID_URL_1 + ";OAuthWebServerTimeout=300", properties);
     assertEquals(300, connectionContext.getOAuthWebServerTimeout());
+  }
+
+  @Test
+  public void testDefaultGetterCoverage() throws DatabricksSQLException {
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(TestConstants.VALID_URL_1, properties);
+    // Exercise default-value getters for coverage
+    assertNull(ctx.getPassThroughAccessToken());
+    assertTrue(ctx.getLogFileSize() > 0);
+    assertTrue(ctx.getLogFileCount() > 0);
+    assertNotNull(ctx.shouldRetryTemporarilyUnavailableError());
+    assertNotNull(ctx.shouldRetryRateLimitError());
+    assertTrue(ctx.getTemporarilyUnavailableRetryTimeout() >= 0);
+    assertTrue(ctx.getRateLimitRetryTimeout() >= 0);
+    assertTrue(ctx.getApiRetryTimeout() >= 0);
+    assertFalse(ctx.enableShowCommandsForGetFunctions());
+    assertFalse(ctx.treatMetadataCatalogNameAsPattern());
   }
 }
