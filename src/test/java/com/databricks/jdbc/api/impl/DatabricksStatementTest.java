@@ -1005,7 +1005,7 @@ public class DatabricksStatementTest {
   }
 
   @Test
-  public void testReExecutionNullsStatementIdAndClosesPreviousResultSet() throws Exception {
+  public void testReExecutionClosesPreviousResultSetButNotServerHandle() throws Exception {
     IDatabricksConnectionContext connectionContext =
         DatabricksConnectionContext.parse(JDBC_URL, new Properties());
     DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
@@ -1028,10 +1028,12 @@ public class DatabricksStatementTest {
     // First execution
     statement.executeQuery(STATEMENT);
 
-    // Second execution — previous ResultSet should be closed
+    // Second execution — should close previous ResultSet per JDBC spec.
+    // Server handle is NOT explicitly closed (server manages handle lifecycle).
     statement.executeQuery(STATEMENT);
 
     verify(firstResult, times(1)).close();
+    verify(client, never()).closeStatement(any(StatementId.class));
     assertEquals(secondResult, statement.getResultSet());
   }
 

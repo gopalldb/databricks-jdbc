@@ -962,11 +962,12 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     noMoreResults = false;
     updateCount = -1;
 
-    // Note: We intentionally do NOT close the previous server-side operation handle here.
-    // While this means N re-executions may leave N-1 handles on the server, attempting to
-    // close them here can corrupt the Thrift HTTP transport (e.g., fake server returns 404
-    // which breaks the connection for subsequent requests). Server handles are cleaned up
-    // when the session is closed. For direct results, the server already closed the handle.
+    // Per JDBC spec, re-execution does not explicitly close the previous server-side
+    // operation handle. The server manages operation handle lifecycle — handles are
+    // cleaned up when the session closes or the server evicts idle operations.
+    // Attempting to close handles here would corrupt Thrift HTTP transport connections
+    // when the server returns unexpected responses (e.g., WireMock 404 in tests).
+    // For direct results, the server already closed the handle.
 
     directResultsReceived = false;
 
