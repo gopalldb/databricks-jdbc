@@ -5,7 +5,6 @@ import static com.databricks.jdbc.common.EnvironmentVariables.*;
 import static com.databricks.jdbc.common.util.DatabricksThriftUtil.*;
 
 import com.databricks.jdbc.api.impl.*;
-import com.databricks.jdbc.api.impl.DatabricksStatement;
 import com.databricks.jdbc.api.internal.IDatabricksConnectionContext;
 import com.databricks.jdbc.api.internal.IDatabricksSession;
 import com.databricks.jdbc.api.internal.IDatabricksStatementInternal;
@@ -269,16 +268,18 @@ final class DatabricksThriftAccessor {
               parentStatement,
               session);
 
-      // For direct results, the server operation is already complete — no further
-      // RPCs (getOperationStatus, FetchResults, closeOperation) will succeed for
-      // this operation handle. Mark the statement so close() skips the server call.
+      // Mark direct results only if the server confirmed it closed the operation.
+      // TSparkDirectResults.closeOperation is optional — a server can return inline
+      // data without closing the op (older protocol versions, interactive flows).
+      // Without this guard, close() would skip the server RPC and leak the handle.
       if (isDirectResults
           && parentStatement != null
-          && parentStatement.getStatement() instanceof DatabricksStatement) {
+          && response.getDirectResults().isSetCloseOperation()) {
         LOGGER.debug(
-            "Statement {} received direct results via Thrift, marking as direct results received",
+            "Statement {} received direct results via Thrift with close confirmation, "
+                + "marking as direct results received",
             statementId);
-        ((DatabricksStatement) parentStatement.getStatement()).markDirectResultsReceived();
+        parentStatement.markDirectResultsReceived();
       }
 
       return databricksResultSet;

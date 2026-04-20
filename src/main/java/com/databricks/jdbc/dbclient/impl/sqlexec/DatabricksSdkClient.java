@@ -337,7 +337,7 @@ public class DatabricksSdkClient implements IDatabricksClient {
       LOGGER.debug(
           "Statement {} returned CLOSED status with direct results, marking as direct results received",
           statementId);
-      ((DatabricksStatement) parentStatement.getStatement()).markDirectResultsReceived();
+      parentStatement.markDirectResultsReceived();
     }
 
     return resultSet;

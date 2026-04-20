@@ -966,6 +966,150 @@ public class DatabricksStatementTest {
   }
 
   @Test
+  public void testCloseAfterDirectResultsPropagatesResultSetCloseException() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    DatabricksResultSet mockResultSet = mock(DatabricksResultSet.class);
+    doThrow(new DatabricksSQLException("Error closing result set", "HY000"))
+        .when(mockResultSet)
+        .close();
+
+    when(client.executeStatement(
+            eq(STATEMENT),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement),
+            any()))
+        .thenReturn(mockResultSet);
+
+    statement.executeQuery(STATEMENT);
+    // Simulate the SDK setting a statement ID (resetForNewExecution nulls it,
+    // and our mock doesn't call setStatementId like the real SDK does)
+    statement.setStatementId(new StatementId("test-stmt-id"));
+    statement.markDirectResultsReceived();
+
+    // close() should propagate the exception from resultSet.close()
+    assertThrows(DatabricksSQLException.class, () -> statement.close());
+
+    // But session cleanup should still happen (try/finally)
+    // closeStatement should NOT be called (direct results, server already closed)
+    verify(client, never()).closeStatement(any(StatementId.class));
+
+    // Statement should still be marked as closed despite the exception
+    assertTrue(statement.isClosed());
+  }
+
+  @Test
+  public void testReExecutionClosesServerHandle() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    StatementId firstStmtId = new StatementId("first-stmt");
+    StatementId secondStmtId = new StatementId("second-stmt");
+
+    when(client.executeStatement(
+            eq(STATEMENT),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement),
+            any()))
+        .thenAnswer(
+            invocation -> {
+              // Simulate SDK setting statementId after execution
+              statement.setStatementId(firstStmtId);
+              return resultSet;
+            })
+        .thenAnswer(
+            invocation -> {
+              statement.setStatementId(secondStmtId);
+              return resultSet;
+            });
+
+    // First execution (non-direct-results)
+    statement.executeQuery(STATEMENT);
+    assertEquals(firstStmtId, statement.getStatementId());
+
+    // Second execution — should close the first server handle
+    statement.executeQuery(STATEMENT);
+
+    // The first statement's server handle should have been closed
+    verify(client, times(1)).closeStatement(firstStmtId);
+  }
+
+  @Test
+  public void testAsyncExecutionResetsStateFromPreviousSyncExecution() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    when(client.executeStatement(
+            eq(STATEMENT),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement),
+            any()))
+        .thenReturn(resultSet);
+
+    // Sync execution with direct results
+    statement.executeQuery(STATEMENT);
+    statement.markDirectResultsReceived();
+
+    DatabricksResultSet asyncResult = mock(DatabricksResultSet.class);
+    when(client.executeStatementAsync(
+            eq("SELECT 1"),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(Collections.emptyMap()),
+            any(IDatabricksSession.class),
+            eq(statement)))
+        .thenReturn(asyncResult);
+
+    // Async execution — should close previous result set and reset directResultsReceived
+    ResultSet result = statement.executeAsync("SELECT 1");
+    assertNotNull(result);
+
+    // Previous result set should be closed
+    verify(resultSet, times(1)).close();
+  }
+
+  @Test
+  public void testCancelAfterDirectResultsAddsWarning() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    when(client.executeStatement(
+            eq(STATEMENT),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement),
+            any()))
+        .thenReturn(resultSet);
+
+    statement.executeQuery(STATEMENT);
+    statement.markDirectResultsReceived();
+
+    // Cancel should add a warning (not just debug log)
+    statement.cancel();
+    assertNotNull(statement.getWarnings());
+    assertTrue(statement.getWarnings().getMessage().contains("already closed"));
+  }
+
+  @Test
   public void testRemoveEmptyEscapeClauseFromQuery() throws Exception {
     IDatabricksConnectionContext connectionContext =
         DatabricksConnectionContext.parse(JDBC_URL, new Properties());

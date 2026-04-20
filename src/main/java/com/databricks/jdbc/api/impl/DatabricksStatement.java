@@ -55,9 +55,10 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
   private final DatabricksBatchExecutor databricksBatchExecutor;
   private boolean noMoreResults = false; // JDBC end-of-results indicator
   private long updateCount = -1; // Update count for DML statements, -1 for SELECT or no results
-  private boolean directResultsReceived = false; // Server returned inline results and closed the
-  // operation — no further RPCs for this statement ID are possible. The JDBC Statement itself
-  // remains open for re-execution. Reset on each new execution.
+  private volatile boolean directResultsReceived = false; // Server returned inline results and
+  // closed the operation — no further RPCs for this statement ID are possible. The JDBC Statement
+  // itself remains open for re-execution. Reset on each new execution. Volatile because cancel()
+  // can be called from a different thread (JDBC spec requirement).
   protected Boolean shouldReturnResultSet =
       null; // Cached result of shouldReturnResultSetWithConfig()
 
@@ -137,35 +138,39 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
   @Override
   public void close(boolean removeFromSession) throws DatabricksSQLException {
     LOGGER.debug("public void close(boolean removeFromSession)");
-    if (isClosed) {
-      if (resultSet != null) {
-        this.resultSet.close();
-        this.resultSet = null;
-      }
-    } else if (statementId == null) {
-      String warningMsg = "The statement you are trying to close does not have an ID yet.";
-      LOGGER.warn(warningMsg);
-      warnings = WarningUtil.addWarning(warnings, warningMsg);
-    } else {
-      // Skip server-side close if the server already closed the operation (direct results).
-      // The operation handle is gone on the server side, so closeStatement would fail.
-      if (!directResultsReceived) {
-        this.connection.getSession().getDatabricksClient().closeStatement(statementId);
-      }
-      if (resultSet != null) {
-        this.resultSet.close();
-        this.resultSet = null;
-      }
+    try {
+      if (isClosed) {
+        if (resultSet != null) {
+          this.resultSet.close();
+          this.resultSet = null;
+        }
+      } else if (statementId == null) {
+        String warningMsg = "The statement you are trying to close does not have an ID yet.";
+        LOGGER.warn(warningMsg);
+        warnings = WarningUtil.addWarning(warnings, warningMsg);
+      } else {
+        // Skip server-side close if the server already closed the operation (direct results).
+        // The operation handle is gone on the server side, so closeStatement would fail.
+        if (!directResultsReceived) {
+          this.connection.getSession().getDatabricksClient().closeStatement(statementId);
+        }
+        if (resultSet != null) {
+          this.resultSet.close();
+          this.resultSet = null;
+        }
 
-      if (removeFromSession) {
-        this.connection.closeStatement(this);
+        if (removeFromSession) {
+          this.connection.closeStatement(this);
+        }
+        DatabricksThreadContextHolder.clearStatementInfo();
       }
-      DatabricksThreadContextHolder.clearStatementInfo();
+    } finally {
+      // Always run cleanup even if resultSet.close() or closeStatement() throws.
+      // This ensures executor shutdown, state reset, and isClosed=true regardless.
+      shutDownExecutor();
+      this.updateCount = -1;
+      this.isClosed = true;
     }
-
-    shutDownExecutor();
-    this.updateCount = -1; // Reset update count when statement is closed
-    this.isClosed = true;
   }
 
   @Override
@@ -240,10 +245,10 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
       this.connection.getSession().getDatabricksClient().cancelStatement(statementId);
       DatabricksThreadContextHolder.clearStatementInfo();
     } else if (directResultsReceived) {
-      LOGGER.debug(
-          "Skipping cancel for statement {} — direct results already received, "
-              + "server operation closed",
-          statementId);
+      String warningMsg =
+          "Statement's server operation was already closed (direct results); cancel has no effect.";
+      LOGGER.debug(warningMsg);
+      warnings = WarningUtil.addWarning(warnings, warningMsg);
     } else {
       warnings =
           WarningUtil.addWarning(
@@ -662,17 +667,7 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     LOGGER.debug("ResultSet executeAsync() for statement {%s}", sql);
     checkIfClosed();
 
-    // Reset state for new execution — a previous sync execute() may have set
-    // directResultsReceived, which must be cleared before the new async execution
-    directResultsReceived = false;
-    if (resultSet != null) {
-      try {
-        resultSet.close();
-      } catch (SQLException e) {
-        LOGGER.debug("Failed to close previous result set during async re-execution", e);
-      }
-      resultSet = null;
-    }
+    resetForNewExecution();
 
     IDatabricksClient client = connection.getSession().getDatabricksClient();
     DatabricksThreadContextHolder.setStatementType(StatementType.SQL);
@@ -873,18 +868,7 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
   DatabricksResultSet executeInternal(
       String sql, Map<Integer, ImmutableSqlParameter> params, StatementType statementType)
       throws SQLException {
-    noMoreResults = false; // reset before each execution
-    directResultsReceived = false; // reset for new execution
-
-    // Per JDBC spec, re-executing a Statement implicitly closes the current ResultSet
-    if (resultSet != null) {
-      try {
-        resultSet.close();
-      } catch (SQLException e) {
-        LOGGER.debug("Failed to close previous result set during re-execution", e);
-      }
-      resultSet = null;
-    }
+    resetForNewExecution();
 
     DatabricksThreadContextHolder.setStatementType(statementType);
     DatabricksResultSet result = executeInternal(sql, params, statementType, true);
@@ -961,6 +945,43 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
   public void markDirectResultsReceived() {
     LOGGER.debug("Statement {} received direct results (server closed operation)", statementId);
     this.directResultsReceived = true;
+  }
+
+  /**
+   * Resets statement state before a new execution (sync or async). Closes the previous server-side
+   * operation handle (if still open) and the local ResultSet, clears flags, and nulls the
+   * statementId so a failed execution doesn't leave stale state.
+   */
+  private void resetForNewExecution() {
+    noMoreResults = false;
+    updateCount = -1;
+
+    // Close previous server-side operation handle if still open (non-direct-results path).
+    // For direct results, the server already closed the handle — skip the RPC.
+    // Without this, N re-executions leak N-1 server-side operation handles.
+    if (statementId != null && !directResultsReceived) {
+      try {
+        this.connection.getSession().getDatabricksClient().closeStatement(statementId);
+      } catch (Exception e) {
+        LOGGER.debug("Failed to close previous server operation during re-execution", e);
+      }
+    }
+
+    directResultsReceived = false;
+
+    // Close previous local ResultSet (per JDBC spec, re-execution implicitly closes it)
+    if (resultSet != null) {
+      try {
+        resultSet.close();
+      } catch (SQLException e) {
+        LOGGER.debug("Failed to close previous result set during re-execution", e);
+      }
+      resultSet = null;
+    }
+
+    // Null out statementId so that if the new execution fails before setStatementId(),
+    // close() takes the statementId==null branch instead of sending closeStatement(stale-id)
+    statementId = null;
   }
 
   /**
