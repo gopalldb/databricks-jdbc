@@ -1101,7 +1101,14 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
 
   @Override
   public boolean useQueryForMetadata() {
-    return getParameter(DatabricksJdbcUrlParams.USE_QUERY_FOR_METADATA).equals("1");
+    // If user explicitly set the property, honour their choice for any compute type
+    String userValue = getParameterIgnoreDefault(DatabricksJdbcUrlParams.USE_QUERY_FOR_METADATA);
+    if (userValue != null) {
+      return userValue.equals("1");
+    }
+    // Default: SHOW commands for SQL Warehouses only.
+    // All-Purpose Clusters default to native Thrift RPCs.
+    return !(computeResource instanceof AllPurposeCluster);
   }
 
   @Override
