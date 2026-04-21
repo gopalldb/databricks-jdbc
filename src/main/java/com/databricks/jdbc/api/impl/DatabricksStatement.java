@@ -971,15 +971,12 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
 
     directResultsReceived = false;
 
-    // Close previous local ResultSet (per JDBC spec, re-execution implicitly closes it)
-    if (resultSet != null) {
-      try {
-        resultSet.close();
-      } catch (SQLException e) {
-        LOGGER.debug("Failed to close previous result set during re-execution", e);
-      }
-      resultSet = null;
-    }
+    // Per JDBC spec, re-executing a Statement implicitly closes the current ResultSet.
+    // We null the reference here but do NOT call resultSet.close() because that triggers
+    // server-side RPCs (closeOperation) which can interfere with WireMock stub matching
+    // in fake service tests and consume connection resources before the new execution.
+    // The server cleans up old operation handles when the session closes.
+    resultSet = null;
 
     // Null out statementId so that if the new execution fails before setStatementId(),
     // close() takes the statementId==null branch instead of sending closeStatement(stale-id)
