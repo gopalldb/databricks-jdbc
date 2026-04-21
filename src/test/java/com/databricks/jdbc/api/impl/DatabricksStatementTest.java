@@ -958,10 +958,10 @@ public class DatabricksStatementTest {
     statement.executeQuery(STATEMENT);
     statement.markDirectResultsReceived();
 
-    // Second execution — previous result set reference is released (not explicitly closed
-    // to avoid triggering server-side RPCs that can interfere with connection state)
+    // Second execution — previous result set is closed per JDBC spec
     statement.executeQuery(STATEMENT);
 
+    verify(firstResult, times(1)).close();
     assertEquals(secondResult, statement.getResultSet());
   }
 
@@ -1005,7 +1005,7 @@ public class DatabricksStatementTest {
   }
 
   @Test
-  public void testReExecutionReleasesPreviousResultSetWithoutServerClose() throws Exception {
+  public void testReExecutionClosesPreviousResultSetWithoutServerHandleClose() throws Exception {
     IDatabricksConnectionContext connectionContext =
         DatabricksConnectionContext.parse(JDBC_URL, new Properties());
     DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
@@ -1028,10 +1028,11 @@ public class DatabricksStatementTest {
     // First execution
     statement.executeQuery(STATEMENT);
 
-    // Second execution — previous ResultSet reference is released (not explicitly closed
-    // to avoid triggering server-side RPCs). No server handle close either.
+    // Second execution — previous ResultSet is closed per JDBC spec.
+    // Server handle is NOT explicitly closed (server manages handle lifecycle).
     statement.executeQuery(STATEMENT);
 
+    verify(firstResult, times(1)).close();
     verify(client, never()).closeStatement(any(StatementId.class));
     assertEquals(secondResult, statement.getResultSet());
   }
@@ -1066,9 +1067,12 @@ public class DatabricksStatementTest {
             eq(statement)))
         .thenReturn(asyncResult);
 
-    // Async execution — should release previous result set and reset directResultsReceived
+    // Async execution — should close previous result set and reset directResultsReceived
     ResultSet result = statement.executeAsync("SELECT 1");
     assertNotNull(result);
+
+    // Previous result set should be closed per JDBC spec
+    verify(resultSet, times(1)).close();
   }
 
   @Test
