@@ -29,10 +29,12 @@ import com.google.common.base.Strings;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableMap;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.*;
 import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
+import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URIBuilder;
 
 public class DatabricksConnectionContext implements IDatabricksConnectionContext {
@@ -108,14 +110,14 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
     if (!isNullOrEmpty(connectionParamString)) {
       String[] urlParts = connectionParamString.split(DatabricksJdbcConstants.URL_DELIMITER);
       for (String urlPart : urlParts) {
-        String[] pair = urlPart.split(DatabricksJdbcConstants.PAIR_DELIMITER);
-        if (pair.length == 1) {
-          pair = new String[] {pair[0], ""};
-        }
-        if (pair[0].startsWith(DatabricksJdbcUrlParams.HTTP_HEADERS.getParamName())) {
-          parametersBuilder.put(pair[0], pair[1]);
+        // Split on first '=' only — values (like httpPath) may contain '=' (e.g. ?o=123)
+        int delimIdx = urlPart.indexOf(DatabricksJdbcConstants.PAIR_DELIMITER);
+        String key = delimIdx >= 0 ? urlPart.substring(0, delimIdx) : urlPart;
+        String value = delimIdx >= 0 ? urlPart.substring(delimIdx + 1) : "";
+        if (key.startsWith(DatabricksJdbcUrlParams.HTTP_HEADERS.getParamName())) {
+          parametersBuilder.put(key, value);
         } else {
-          parametersBuilder.put(pair[0].toLowerCase(), pair[1]);
+          parametersBuilder.put(key.toLowerCase(), value);
         }
       }
     }
@@ -1166,14 +1168,52 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
     return this.parameters.getOrDefault(key.getParamName().toLowerCase(), defaultValue);
   }
 
+  private static final String ORG_ID_HEADER = "x-databricks-org-id";
+  private static final String ORG_ID_QUERY_PARAM = "o";
+
   private Map<String, String> parseCustomHeaders(ImmutableMap<String, String> parameters) {
     String filterPrefix = DatabricksJdbcUrlParams.HTTP_HEADERS.getParamName();
 
-    return parameters.entrySet().stream()
-        .filter(entry -> entry.getKey().startsWith(filterPrefix))
-        .collect(
-            Collectors.toMap(
-                entry -> entry.getKey().substring(filterPrefix.length()), Map.Entry::getValue));
+    Map<String, String> headers =
+        new HashMap<>(
+            parameters.entrySet().stream()
+                .filter(entry -> entry.getKey().startsWith(filterPrefix))
+                .collect(
+                    Collectors.toMap(
+                        entry -> entry.getKey().substring(filterPrefix.length()),
+                        Map.Entry::getValue)));
+
+    // Extract org ID from ?o= in httpPath for SPOG routing
+    if (!headers.containsKey(ORG_ID_HEADER)) {
+      String httpPath =
+          parameters.getOrDefault(
+              DatabricksJdbcUrlParams.HTTP_PATH.getParamName().toLowerCase(), "");
+      try {
+        for (NameValuePair param :
+            new URIBuilder("http://placeholder" + httpPath).getQueryParams()) {
+          if (ORG_ID_QUERY_PARAM.equals(param.getName())
+              && param.getValue() != null
+              && !param.getValue().isEmpty()) {
+            headers.put(ORG_ID_HEADER, param.getValue());
+            LOGGER.debug(
+                "SPOG header extraction: injecting {}={} (extracted from ?o= in httpPath)",
+                ORG_ID_HEADER,
+                param.getValue());
+            break;
+          }
+        }
+      } catch (URISyntaxException e) {
+        LOGGER.debug(
+            "SPOG header extraction: malformed httpPath, skipping org-id extraction: "
+                + e.getMessage());
+      }
+    } else {
+      LOGGER.debug(
+          "SPOG header extraction: {} already set by caller, not extracting from httpPath",
+          ORG_ID_HEADER);
+    }
+
+    return headers;
   }
 
   @Override
