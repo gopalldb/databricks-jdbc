@@ -1453,4 +1453,38 @@ class DatabricksConnectionContextTest {
     assertFalse(ctx.enableShowCommandsForGetFunctions());
     assertFalse(ctx.treatMetadataCatalogNameAsPattern());
   }
+
+  @Test
+  public void testUseQueryForMetadataDefaultTrueForWarehouse() throws DatabricksSQLException {
+    // Warehouse URL without explicit UseQueryForMetadata — should default to true
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(TestConstants.VALID_URL_1, properties);
+    assertTrue(ctx.useQueryForMetadata());
+  }
+
+  @Test
+  public void testUseQueryForMetadataDefaultFalseForCluster() throws DatabricksSQLException {
+    // Cluster URL without explicit UseQueryForMetadata — should default to false
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(TestConstants.VALID_CLUSTER_URL, properties);
+    assertFalse(ctx.useQueryForMetadata());
+  }
+
+  @Test
+  public void testUseQueryForMetadataExplicitTrueOnCluster() throws DatabricksSQLException {
+    // Cluster URL with explicit UseQueryForMetadata=1 — should be honoured
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_CLUSTER_URL + ";UseQueryForMetadata=1", properties);
+    assertTrue(ctx.useQueryForMetadata());
+  }
+
+  @Test
+  public void testUseQueryForMetadataExplicitFalseOnWarehouse() throws DatabricksSQLException {
+    // Warehouse URL with explicit UseQueryForMetadata=0 — should be honoured
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";UseQueryForMetadata=0", properties);
+    assertFalse(ctx.useQueryForMetadata());
+  }
 }
