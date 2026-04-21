@@ -813,7 +813,7 @@ class DatabricksConnectionContextTest {
     DatabricksConnectionContext connectionContext =
         (DatabricksConnectionContext)
             DatabricksConnectionContext.parse(TestConstants.VALID_URL_1, properties);
-    assertTrue(connectionContext.isSqlExecDirectResultsEnabled());
+    assertTrue(connectionContext.getDirectResultMode());
 
     // Test when EnableSQLExecDirectResults=1
     String urlWithDirectResults =
@@ -822,7 +822,7 @@ class DatabricksConnectionContextTest {
     connectionContext =
         (DatabricksConnectionContext)
             DatabricksConnectionContext.parse(urlWithDirectResults, properties);
-    assertTrue(connectionContext.isSqlExecDirectResultsEnabled());
+    assertTrue(connectionContext.getDirectResultMode());
 
     // Test when EnableSQLExecDirectResults=0
     String urlWithoutDirectResults =
@@ -831,7 +831,7 @@ class DatabricksConnectionContextTest {
     connectionContext =
         (DatabricksConnectionContext)
             DatabricksConnectionContext.parse(urlWithoutDirectResults, properties);
-    assertFalse(connectionContext.isSqlExecDirectResultsEnabled());
+    assertFalse(connectionContext.getDirectResultMode());
   }
 
   @Test
@@ -1356,5 +1356,101 @@ class DatabricksConnectionContextTest {
         DatabricksConnectionContext.parse(
             TestConstants.VALID_URL_1 + ";OAuthWebServerTimeout=300", properties);
     assertEquals(300, connectionContext.getOAuthWebServerTimeout());
+  }
+
+  // ==================== SPOG ?o= Tests ====================
+
+  @Test
+  void testBuildPropertiesMap_preservesQueryParamInHttpPath() {
+    String params = "ssl=1;AuthMech=3;httpPath=/sql/1.0/warehouses/abc123?o=999;UseThriftClient=1";
+    ImmutableMap<String, String> result = buildPropertiesMap(params, new Properties());
+
+    assertEquals("/sql/1.0/warehouses/abc123?o=999", result.get("httppath"));
+    assertEquals("1", result.get("usethriftclient"));
+  }
+
+  @Test
+  void testBuildPropertiesMap_handlesValueWithMultipleEquals() {
+    String params = "httpPath=/sql/1.0/warehouses/abc?o=999&other=foo";
+    ImmutableMap<String, String> result = buildPropertiesMap(params, new Properties());
+
+    assertEquals("/sql/1.0/warehouses/abc?o=999&other=foo", result.get("httppath"));
+  }
+
+  @Test
+  void testBuildPropertiesMap_handlesValueWithNoEquals() {
+    String params = "keyonly";
+    ImmutableMap<String, String> result = buildPropertiesMap(params, new Properties());
+
+    assertEquals("", result.get("keyonly"));
+  }
+
+  @Test
+  void testSpogContext_extractsOrgIdFromHttpPath() throws DatabricksSQLException {
+    Properties props = new Properties();
+    props.put("user", "token");
+    props.put("password", "test-token");
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(TestConstants.VALID_SPOG_URL_WAREHOUSE, props);
+
+    Map<String, String> headers = ctx.getCustomHeaders();
+    assertEquals("6051921418418893", headers.get("x-databricks-org-id"));
+  }
+
+  @Test
+  void testSpogContext_extractsCleanWarehouseId() throws DatabricksSQLException {
+    Properties props = new Properties();
+    props.put("user", "token");
+    props.put("password", "test-token");
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(TestConstants.VALID_SPOG_URL_WAREHOUSE, props);
+
+    // Warehouse ID should be "abc123" not "abc123?o=6051921418418893"
+    assertTrue(ctx.getComputeResource() instanceof Warehouse);
+    assertEquals("abc123", ((Warehouse) ctx.getComputeResource()).getWarehouseId());
+  }
+
+  @Test
+  void testSpogContext_noOrgIdWithoutQueryParam() throws DatabricksSQLException {
+    Properties props = new Properties();
+    props.put("user", "token");
+    props.put("password", "test-token");
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(TestConstants.VALID_URL_1, props);
+
+    Map<String, String> headers = ctx.getCustomHeaders();
+    assertFalse(headers.containsKey("x-databricks-org-id"));
+  }
+
+  @Test
+  void testSpogContext_explicitHeaderTakesPrecedence() throws DatabricksSQLException {
+    String url =
+        "jdbc:databricks://host/default;ssl=1;AuthMech=3;"
+            + "httpPath=/sql/1.0/warehouses/abc123?o=frompath;"
+            + "http.header.x-databricks-org-id=fromheader";
+    Properties props = new Properties();
+    props.put("user", "token");
+    props.put("password", "test-token");
+    IDatabricksConnectionContext ctx = DatabricksConnectionContext.parse(url, props);
+
+    Map<String, String> headers = ctx.getCustomHeaders();
+    assertEquals("fromheader", headers.get("x-databricks-org-id"));
+  }
+
+  @Test
+  public void testDefaultGetterCoverage() throws DatabricksSQLException {
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(TestConstants.VALID_URL_1, properties);
+    // Exercise default-value getters for coverage
+    assertNull(ctx.getPassThroughAccessToken());
+    assertTrue(ctx.getLogFileSize() > 0);
+    assertTrue(ctx.getLogFileCount() > 0);
+    assertNotNull(ctx.shouldRetryTemporarilyUnavailableError());
+    assertNotNull(ctx.shouldRetryRateLimitError());
+    assertTrue(ctx.getTemporarilyUnavailableRetryTimeout() >= 0);
+    assertTrue(ctx.getRateLimitRetryTimeout() >= 0);
+    assertTrue(ctx.getApiRetryTimeout() >= 0);
+    assertFalse(ctx.enableShowCommandsForGetFunctions());
+    assertFalse(ctx.treatMetadataCatalogNameAsPattern());
   }
 }
