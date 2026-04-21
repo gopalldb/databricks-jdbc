@@ -154,7 +154,7 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
         if (!directResultsReceived) {
           this.connection.getSession().getDatabricksClient().closeStatement(statementId);
         } else {
-          LOGGER.info(
+          LOGGER.debug(
               "Statement {} closed locally (direct results — server operation already closed, "
                   + "skipping closeStatement RPC)",
               statementId);

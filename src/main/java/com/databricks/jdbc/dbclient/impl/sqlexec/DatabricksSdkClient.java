@@ -321,7 +321,8 @@ public class DatabricksSdkClient implements IDatabricksClient {
     // Defer markDirectResultsReceived until AFTER ResultSet construction.
     // VolumeOperationResult (created during ResultSet construction) accesses
     // statement properties that require the statement to be in a valid state.
-    boolean shouldMarkClosed = responseState == StatementState.CLOSED && parentStatement != null;
+    boolean shouldMarkDirectResults =
+        responseState == StatementState.CLOSED && parentStatement != null;
 
     DatabricksResultSet resultSet =
         new DatabricksResultSet(
@@ -333,7 +334,7 @@ public class DatabricksSdkClient implements IDatabricksClient {
             session,
             parentStatement);
 
-    if (shouldMarkClosed) {
+    if (shouldMarkDirectResults) {
       LOGGER.debug(
           "Statement {} returned CLOSED status with direct results, marking as direct results received",
           statementId);
