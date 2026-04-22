@@ -376,6 +376,11 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
           };
 
       mgr.startHeartbeat(statementId, heartbeatTask);
+      LOGGER.debug(
+          "Heartbeat started for statement {} (resultType={}, interval={}s)",
+          statementId,
+          resultSetType,
+          mgr.getIntervalSeconds());
     } catch (Exception e) {
       LOGGER.debug("Failed to start heartbeat: {}", e.getMessage());
     }

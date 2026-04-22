@@ -62,6 +62,9 @@ class ResultHeartbeatManager {
     // Stop any existing heartbeat for this statement (e.g., re-execution)
     stopHeartbeat(statementId);
 
+    // Reset the stopped flag for the new heartbeat
+    getStoppedFlag(statementId).set(false);
+
     LOGGER.debug(
         "Starting heartbeat for statement {} with interval {}s", statementId, intervalSeconds);
 
@@ -138,5 +141,9 @@ class ResultHeartbeatManager {
 
   boolean isShutdown() {
     return isShutdown;
+  }
+
+  int getIntervalSeconds() {
+    return intervalSeconds;
   }
 }
