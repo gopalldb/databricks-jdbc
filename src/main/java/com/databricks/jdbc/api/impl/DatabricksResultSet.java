@@ -307,17 +307,20 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
       return;
     }
 
-    // Skip heartbeat for result types where all data is already client-side:
+    // Skip heartbeat when all data is already client-side or server already closed:
     // - SEA_INLINE (InlineJsonResult): all rows loaded in memory at construction
-    // - Update count results: no result data to keep alive
     // - No execution result: nothing to fetch
+    // - Update count: no result data to keep alive
+    // - Direct results (CLOSED state): server already closed the operation, data delivered inline
     if (resultSetType == ResultSetType.SEA_INLINE || executionResult == null) {
       return;
     }
-
-    // Skip if this is an update count (no result rows to keep alive)
     if (statementType == StatementType.UPDATE) {
       return;
+    }
+    if (executionStatus != null
+        && executionStatus.getExecutionState() == com.databricks.jdbc.api.ExecutionState.CLOSED) {
+      return; // direct results — server already closed, no heartbeat needed
     }
 
     try {
