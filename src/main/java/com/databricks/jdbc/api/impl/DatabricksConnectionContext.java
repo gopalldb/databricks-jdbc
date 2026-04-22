@@ -913,7 +913,19 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
   }
 
   public int getHeartbeatIntervalSeconds() {
-    return Integer.parseInt(getParameter(DatabricksJdbcUrlParams.HEARTBEAT_INTERVAL_SECONDS));
+    int interval =
+        Integer.parseInt(getParameter(DatabricksJdbcUrlParams.HEARTBEAT_INTERVAL_SECONDS));
+    if (interval <= 0) {
+      LOGGER.warn("HeartbeatIntervalSeconds must be positive, got {}. Using default 60.", interval);
+      return 60;
+    }
+    if (interval > 3600) {
+      LOGGER.warn(
+          "HeartbeatIntervalSeconds {} is very large (> 1 hour). "
+              + "Heartbeat may not keep the operation alive.",
+          interval);
+    }
+    return interval;
   }
 
   @Override

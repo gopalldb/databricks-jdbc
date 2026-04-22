@@ -320,36 +320,46 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
 
       IDatabricksClient client = conn.getSession().getDatabricksClient();
       final int maxConsecutiveFailures = 10;
+      final java.util.concurrent.atomic.AtomicInteger consecutiveFailures =
+          new java.util.concurrent.atomic.AtomicInteger(0);
+      // Get the stopped flag from the manager — shared between the heartbeat task and
+      // stopHeartbeat(). Prevents RPC on a just-closed client/session: stopHeartbeat sets
+      // the flag before cancel(false), so an in-flight tick sees it and skips the RPC.
+      final java.util.concurrent.atomic.AtomicBoolean stopped = mgr.getStoppedFlag(statementId);
 
       Runnable heartbeatTask =
-          new Runnable() {
-            private int consecutiveFailures = 0;
-
-            @Override
-            public void run() {
-              try {
-                boolean alive = client.checkStatementAlive(statementId);
-                consecutiveFailures = 0; // reset on success
-                if (!alive) {
-                  LOGGER.info(
-                      "Heartbeat detected terminal state for statement {}, stopping", statementId);
-                  stopHeartbeat();
-                }
-              } catch (Exception e) {
-                consecutiveFailures++;
-                LOGGER.debug(
-                    "Heartbeat failed for statement {} (failure {}/{}): {}",
+          () -> {
+            if (stopped.get()) {
+              return; // client/session may be closed, skip RPC
+            }
+            try {
+              boolean alive = client.checkStatementAlive(statementId);
+              consecutiveFailures.set(0); // reset on success
+              if (!alive) {
+                LOGGER.info(
+                    "Heartbeat detected terminal state for statement {}, stopping", statementId);
+                stopped.set(true);
+                stopHeartbeat();
+              }
+            } catch (Exception e) {
+              // If stopped was set during the RPC (connection closing), don't count as failure
+              if (stopped.get()) {
+                return;
+              }
+              int failures = consecutiveFailures.incrementAndGet();
+              LOGGER.debug(
+                  "Heartbeat failed for statement {} (failure {}/{}): {}",
+                  statementId,
+                  failures,
+                  maxConsecutiveFailures,
+                  e.getMessage());
+              if (failures >= maxConsecutiveFailures) {
+                LOGGER.info(
+                    "Heartbeat stopped for statement {} after {} consecutive failures",
                     statementId,
-                    consecutiveFailures,
-                    maxConsecutiveFailures,
-                    e.getMessage());
-                if (consecutiveFailures >= maxConsecutiveFailures) {
-                  LOGGER.info(
-                      "Heartbeat stopped for statement {} after {} consecutive failures",
-                      statementId,
-                      consecutiveFailures);
-                  stopHeartbeat();
-                }
+                    failures);
+                stopped.set(true);
+                stopHeartbeat();
               }
             }
           };

@@ -31,6 +31,8 @@ class ResultHeartbeatManager {
 
   private final ScheduledExecutorService scheduler;
   private final Map<StatementId, ScheduledFuture<?>> activeHeartbeats = new ConcurrentHashMap<>();
+  private final Map<StatementId, java.util.concurrent.atomic.AtomicBoolean> stoppedFlags =
+      new ConcurrentHashMap<>();
   private final int intervalSeconds;
   private volatile boolean isShutdown = false;
 
@@ -78,6 +80,12 @@ class ResultHeartbeatManager {
       return;
     }
 
+    // Set the stopped flag BEFORE canceling — prevents in-flight RPC from calling a closed client
+    java.util.concurrent.atomic.AtomicBoolean flag = stoppedFlags.remove(statementId);
+    if (flag != null) {
+      flag.set(true);
+    }
+
     ScheduledFuture<?> future = activeHeartbeats.remove(statementId);
     if (future != null) {
       future.cancel(false); // don't interrupt if currently running
@@ -85,9 +93,24 @@ class ResultHeartbeatManager {
     }
   }
 
+  /**
+   * Returns a stopped flag for the given statement. The heartbeat task should check this before
+   * each RPC to avoid calling a closed client/session.
+   */
+  java.util.concurrent.atomic.AtomicBoolean getStoppedFlag(StatementId statementId) {
+    return stoppedFlags.computeIfAbsent(
+        statementId, k -> new java.util.concurrent.atomic.AtomicBoolean(false));
+  }
+
   /** Stops all heartbeats and shuts down the scheduler. Called on Connection.close(). */
   void shutdown() {
     isShutdown = true;
+
+    // Set all stopped flags FIRST — prevents in-flight RPCs from calling closed clients
+    for (java.util.concurrent.atomic.AtomicBoolean flag : stoppedFlags.values()) {
+      flag.set(true);
+    }
+    stoppedFlags.clear();
 
     for (Map.Entry<StatementId, ScheduledFuture<?>> entry : activeHeartbeats.entrySet()) {
       entry.getValue().cancel(false);
