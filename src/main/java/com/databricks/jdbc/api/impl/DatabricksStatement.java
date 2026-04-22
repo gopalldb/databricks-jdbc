@@ -172,6 +172,13 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
         this.connection.closeStatement(this);
       }
       DatabricksThreadContextHolder.clearStatementInfo();
+      // Safety net: stop any heartbeat for this statement
+      if (statementId != null) {
+        ResultHeartbeatManager mgr = connection.getHeartbeatManager();
+        if (mgr != null) {
+          mgr.stopHeartbeat(statementId);
+        }
+      }
       shutDownExecutor();
       this.updateCount = -1;
       this.isClosed = true;

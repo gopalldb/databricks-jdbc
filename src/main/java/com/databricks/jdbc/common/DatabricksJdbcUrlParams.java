@@ -233,7 +233,15 @@ public enum DatabricksJdbcUrlParams {
   NON_ROWCOUNT_QUERY_PREFIXES(
       "NonRowcountQueryPrefixes",
       "Comma-separated list of query prefixes (like INSERT,UPDATE,DELETE) that should return result sets instead of row counts",
-      "");
+      ""),
+  ENABLE_HEARTBEAT(
+      "EnableHeartbeat",
+      "Enable periodic heartbeat polling to keep server-side results alive during slow consumption",
+      "0"),
+  HEARTBEAT_INTERVAL_SECONDS(
+      "HeartbeatIntervalSeconds",
+      "Interval in seconds between heartbeat RPCs to keep results alive",
+      "60");
 
   private final String paramName;
   private final String defaultValue;

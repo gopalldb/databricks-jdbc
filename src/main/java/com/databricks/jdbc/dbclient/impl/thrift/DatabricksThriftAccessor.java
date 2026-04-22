@@ -907,7 +907,8 @@ final class DatabricksThriftAccessor {
         internalErrorCode);
   }
 
-  private TGetOperationStatusResp getOperationStatus(
+  // Package-visible for heartbeat access from DatabricksThriftServiceClient
+  TGetOperationStatusResp getOperationStatus(
       TGetOperationStatusReq statusReq, StatementId statementId) throws TException {
     long operationStatusStartTime = System.nanoTime();
     TGetOperationStatusResp operationStatus = getThriftClient().GetOperationStatus(statusReq);

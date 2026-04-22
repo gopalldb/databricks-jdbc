@@ -908,6 +908,14 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
     return getParameter(DatabricksJdbcUrlParams.ENABLE_TELEMETRY).equals("1");
   }
 
+  public boolean isHeartbeatEnabled() {
+    return getParameter(DatabricksJdbcUrlParams.ENABLE_HEARTBEAT).equals("1");
+  }
+
+  public int getHeartbeatIntervalSeconds() {
+    return Integer.parseInt(getParameter(DatabricksJdbcUrlParams.HEARTBEAT_INTERVAL_SECONDS));
+  }
+
   @Override
   public String getVolumeOperationAllowedPaths() {
     return getParameter(

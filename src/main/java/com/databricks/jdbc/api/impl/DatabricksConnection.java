@@ -38,6 +38,7 @@ public class DatabricksConnection implements IDatabricksConnection, IDatabricksC
   private final Set<IDatabricksStatementInternal> statementSet = ConcurrentHashMap.newKeySet();
   private SQLWarning warnings = null;
   private final IDatabricksConnectionContext connectionContext;
+  private final ResultHeartbeatManager heartbeatManager;
 
   /**
    * Creates an instance of Databricks connection for given connection context.
@@ -49,6 +50,7 @@ public class DatabricksConnection implements IDatabricksConnection, IDatabricksC
     this.connectionContext = connectionContext;
     DatabricksThreadContextHolder.setConnectionContext(connectionContext);
     this.session = new DatabricksSession(connectionContext);
+    this.heartbeatManager = createHeartbeatManager(connectionContext);
   }
 
   @VisibleForTesting
@@ -58,8 +60,25 @@ public class DatabricksConnection implements IDatabricksConnection, IDatabricksC
     this.connectionContext = connectionContext;
     DatabricksThreadContextHolder.setConnectionContext(connectionContext);
     this.session = new DatabricksSession(connectionContext, testDatabricksClient);
+    this.heartbeatManager = createHeartbeatManager(connectionContext);
     UserAgentManager.setUserAgent(connectionContext);
     TelemetryHelper.updateTelemetryAppName(connectionContext, null);
+  }
+
+  private static ResultHeartbeatManager createHeartbeatManager(
+      IDatabricksConnectionContext connectionContext) {
+    if (connectionContext instanceof DatabricksConnectionContext) {
+      DatabricksConnectionContext ctx = (DatabricksConnectionContext) connectionContext;
+      if (ctx.isHeartbeatEnabled()) {
+        return new ResultHeartbeatManager(ctx.getHeartbeatIntervalSeconds());
+      }
+    }
+    return null;
+  }
+
+  /** Returns the heartbeat manager, or null if heartbeat is disabled. */
+  ResultHeartbeatManager getHeartbeatManager() {
+    return heartbeatManager;
   }
 
   @Override
@@ -419,6 +438,9 @@ public class DatabricksConnection implements IDatabricksConnection, IDatabricksC
     for (IDatabricksStatementInternal statement : statementSet) {
       statement.close(false);
       statementSet.remove(statement);
+    }
+    if (heartbeatManager != null) {
+      heartbeatManager.shutdown();
     }
     this.session.close();
     TelemetryClientFactory.getInstance().closeTelemetryClient(connectionContext);

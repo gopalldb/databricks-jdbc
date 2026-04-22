@@ -21,6 +21,7 @@ import com.databricks.jdbc.api.internal.IDatabricksStatementInternal;
 import com.databricks.jdbc.common.Nullable;
 import com.databricks.jdbc.common.StatementType;
 import com.databricks.jdbc.common.util.WarningUtil;
+import com.databricks.jdbc.dbclient.IDatabricksClient;
 import com.databricks.jdbc.dbclient.impl.common.StatementId;
 import com.databricks.jdbc.exception.DatabricksParsingException;
 import com.databricks.jdbc.exception.DatabricksSQLException;
@@ -123,6 +124,7 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     this.cachedTelemetryCollector = resolveTelemetryCollector(parentStatement);
     this.isClosed = false;
     this.wasNull = false;
+    startHeartbeatIfEnabled();
   }
 
   @VisibleForTesting
@@ -283,15 +285,105 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
       cachedTelemetryCollector.recordResultSetIteration(
           statementId.toSQLExecStatementId(), resultSetMetaData.getChunkCount(), hasNext);
     }
+    if (!hasNext) {
+      stopHeartbeat();
+    }
     return hasNext;
   }
 
   @Override
   public void close() throws DatabricksSQLException {
+    stopHeartbeat();
     isClosed = true;
     this.executionResult.close();
     if (parentStatement != null) {
       parentStatement.handleResultSetClose(this);
+    }
+  }
+
+  /** Starts heartbeat polling if enabled on the connection and this result set is eligible. */
+  private void startHeartbeatIfEnabled() {
+    if (parentStatement == null || statementId == null) {
+      return;
+    }
+
+    // Skip heartbeat for result types where all data is already client-side:
+    // - SEA_INLINE (InlineJsonResult): all rows loaded in memory at construction
+    // - Update count results: no result data to keep alive
+    // - No execution result: nothing to fetch
+    if (resultSetType == ResultSetType.SEA_INLINE || executionResult == null) {
+      return;
+    }
+
+    // Skip if this is an update count (no result rows)
+    if (statementType == StatementType.UPDATE || statementType == StatementType.METADATA) {
+      return;
+    }
+
+    try {
+      DatabricksConnection conn =
+          (DatabricksConnection) parentStatement.getStatement().getConnection();
+      ResultHeartbeatManager mgr = conn.getHeartbeatManager();
+      if (mgr == null) {
+        return; // heartbeat not enabled
+      }
+
+      IDatabricksClient client = conn.getSession().getDatabricksClient();
+      final int maxConsecutiveFailures = 10;
+
+      Runnable heartbeatTask =
+          new Runnable() {
+            private int consecutiveFailures = 0;
+
+            @Override
+            public void run() {
+              try {
+                boolean alive = client.checkStatementAlive(statementId);
+                consecutiveFailures = 0; // reset on success
+                if (!alive) {
+                  LOGGER.info(
+                      "Heartbeat detected terminal state for statement {}, stopping", statementId);
+                  stopHeartbeat();
+                }
+              } catch (Exception e) {
+                consecutiveFailures++;
+                LOGGER.debug(
+                    "Heartbeat failed for statement {} (failure {}/{}): {}",
+                    statementId,
+                    consecutiveFailures,
+                    maxConsecutiveFailures,
+                    e.getMessage());
+                if (consecutiveFailures >= maxConsecutiveFailures) {
+                  LOGGER.info(
+                      "Heartbeat stopped for statement {} after {} consecutive failures",
+                      statementId,
+                      consecutiveFailures);
+                  stopHeartbeat();
+                }
+              }
+            }
+          };
+
+      mgr.startHeartbeat(statementId, heartbeatTask);
+    } catch (Exception e) {
+      LOGGER.debug("Failed to start heartbeat: {}", e.getMessage());
+    }
+  }
+
+  /** Stops the heartbeat for this result set's statement. Idempotent. */
+  private void stopHeartbeat() {
+    if (parentStatement == null || statementId == null) {
+      return;
+    }
+    try {
+      DatabricksConnection conn =
+          (DatabricksConnection) parentStatement.getStatement().getConnection();
+      ResultHeartbeatManager mgr = conn.getHeartbeatManager();
+      if (mgr != null) {
+        mgr.stopHeartbeat(statementId);
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Failed to stop heartbeat: {}", e.getMessage());
     }
   }
 

@@ -405,6 +405,27 @@ public class DatabricksSdkClient implements IDatabricksClient {
   }
 
   @Override
+  public boolean checkStatementAlive(StatementId typedStatementId) throws SQLException {
+    String statementId = typedStatementId.toSQLExecStatementId();
+    String getStatusPath = String.format(STATEMENT_PATH_WITH_ID, statementId);
+    try {
+      GetStatementRequest request = new GetStatementRequest().setStatementId(statementId);
+      Request req = new Request(Request.GET, getStatusPath, apiClient.serialize(request));
+      req.withHeaders(getHeaders("getStatement"));
+      GetStatementResponse response = apiClient.execute(req, GetStatementResponse.class);
+      StatementState state = response.getStatus().getState();
+      // Terminal states mean the operation is no longer alive
+      return state != StatementState.CANCELED
+          && state != StatementState.CLOSED
+          && state != StatementState.FAILED;
+    } catch (IOException e) {
+      LOGGER.debug("Heartbeat check failed for statement {}: {}", statementId, e.getMessage());
+      throw new DatabricksSQLException(
+          "Heartbeat status check failed", e, DatabricksDriverErrorCode.SDK_CLIENT_ERROR);
+    }
+  }
+
+  @Override
   public DatabricksResultSet getStatementResult(
       StatementId typedStatementId,
       IDatabricksSession session,
