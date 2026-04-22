@@ -456,6 +456,19 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
       if (useThriftClient.equals("1")) {
         return DatabricksClientType.THRIFT;
       } else if (useThriftClient.equals("0")) {
+        // Warn if user explicitly chose SEA but also set Thrift-only metadata params
+        String uqm = getParameterIgnoreDefault(DatabricksJdbcUrlParams.USE_QUERY_FOR_METADATA);
+        String tcp =
+            getParameterIgnoreDefault(
+                DatabricksJdbcUrlParams.TREAT_METADATA_CATALOG_NAME_AS_PATTERN);
+        if ((uqm != null && uqm.equals("0")) || (tcp != null && tcp.equals("1"))) {
+          LOGGER.info(
+              "UseThriftClient=0 (SEA) is set alongside Thrift-only metadata params "
+                  + "(UseQueryForMetadata={}, TreatMetadataCatalogNameAsPattern={}). "
+                  + "Honouring SEA — these metadata params will have no effect.",
+              uqm,
+              tcp);
+        }
         return DatabricksClientType.SEA;
       }
     }
@@ -469,7 +482,7 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
         getParameterIgnoreDefault(DatabricksJdbcUrlParams.TREAT_METADATA_CATALOG_NAME_AS_PATTERN);
     if ((explicitUseQueryForMetadata != null && explicitUseQueryForMetadata.equals("0"))
         || (explicitTreatCatalogAsPattern != null && explicitTreatCatalogAsPattern.equals("1"))) {
-      LOGGER.debug(
+      LOGGER.info(
           "Forcing Thrift client: user requires Thrift-native metadata behavior "
               + "(UseQueryForMetadata={}, TreatMetadataCatalogNameAsPattern={})",
           explicitUseQueryForMetadata,
