@@ -315,8 +315,8 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
       return;
     }
 
-    // Skip if this is an update count (no result rows)
-    if (statementType == StatementType.UPDATE || statementType == StatementType.METADATA) {
+    // Skip if this is an update count (no result rows to keep alive)
+    if (statementType == StatementType.UPDATE) {
       return;
     }
 
