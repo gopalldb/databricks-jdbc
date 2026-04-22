@@ -1554,34 +1554,58 @@ class DatabricksConnectionContextTest {
 
   @Test
   public void testUseQueryForMetadata1_doesNotForceThrift() throws DatabricksSQLException {
-    // UseQueryForMetadata=1 (explicit SHOW commands) → does NOT force Thrift
-    // SHOW commands work in both modes, so SAFE flag / other checks decide
+    // UseQueryForMetadata=1 (SHOW commands) with explicit SEA → should remain SEA
+    // Proves our new check doesn't trigger for UseQueryForMetadata=1
+    // VALID_URL_2 has UseThriftClient=0, so it's SEA
     IDatabricksConnectionContext ctx =
         DatabricksConnectionContext.parse(
-            TestConstants.VALID_URL_1 + ";UseQueryForMetadata=1", properties);
-    // Should NOT be forced to Thrift by metadata params (other checks may still pick Thrift)
-    // The key assertion: it didn't get forced to Thrift by our new check
-    // Since VALID_URL_1 has no UseThriftClient, it goes through other checks (Arrow, CF, flag)
-    // which default to Thrift for this URL — but that's not from our metadata check
-    assertNotNull(ctx.getClientType());
+            TestConstants.VALID_URL_2 + ";UseQueryForMetadata=1", properties_with_pwd);
+    assertEquals(DatabricksClientType.SEA, ctx.getClientType());
   }
 
   @Test
   public void testTreatCatalogAsPattern0_doesNotForceThrift() throws DatabricksSQLException {
-    // TreatMetadataCatalogNameAsPattern=0 (default, literal match) → does NOT force Thrift
+    // TreatMetadataCatalogNameAsPattern=0 (default, literal match) with explicit SEA → stays SEA
+    // Proves our new check doesn't trigger for the default/disabled value
     IDatabricksConnectionContext ctx =
         DatabricksConnectionContext.parse(
-            TestConstants.VALID_URL_1 + ";TreatMetadataCatalogNameAsPattern=0", properties);
-    assertNotNull(ctx.getClientType());
+            TestConstants.VALID_URL_2 + ";TreatMetadataCatalogNameAsPattern=0",
+            properties_with_pwd);
+    assertEquals(DatabricksClientType.SEA, ctx.getClientType());
   }
 
   @Test
   public void testNoMetadataParams_defaultBehavior() throws DatabricksSQLException {
-    // No metadata params set → default behavior (SAFE flag / other checks decide)
+    // No metadata params, no UseThriftClient → other checks decide (Arrow, CF, SAFE flag).
+    // VALID_URL_1 has no UseThriftClient and no SAFE flag in tests, so downstream
+    // checks (Arrow disabled, CF disabled, no flag) fall through to Thrift default.
+    // This tests that our metadata param check doesn't interfere with the default path.
     IDatabricksConnectionContext ctx =
         DatabricksConnectionContext.parse(TestConstants.VALID_URL_1, properties);
-    // VALID_URL_1 has no UseThriftClient, defaults to Thrift (no SAFE flag in tests)
     assertEquals(DatabricksClientType.THRIFT, ctx.getClientType());
+  }
+
+  @Test
+  public void testUseQueryForMetadataFalseString_doesNotForceThrift()
+      throws DatabricksSQLException {
+    // "false" is not "0" — our check uses .equals("0"), so "false" doesn't trigger it.
+    // With explicit SEA (VALID_URL_2), should stay SEA.
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_2 + ";UseQueryForMetadata=false", properties_with_pwd);
+    assertEquals(DatabricksClientType.SEA, ctx.getClientType());
+  }
+
+  @Test
+  public void testTreatCatalogAsPatternTrueString_doesNotForceThrift()
+      throws DatabricksSQLException {
+    // "true" is not "1" — our check uses .equals("1"), so "true" doesn't trigger it.
+    // With explicit SEA (VALID_URL_2), should stay SEA.
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_2 + ";TreatMetadataCatalogNameAsPattern=true",
+            properties_with_pwd);
+    assertEquals(DatabricksClientType.SEA, ctx.getClientType());
   }
 
   @Test
