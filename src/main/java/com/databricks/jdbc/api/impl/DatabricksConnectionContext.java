@@ -457,17 +457,19 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
         return DatabricksClientType.THRIFT;
       } else if (useThriftClient.equals("0")) {
         // Warn if user explicitly chose SEA but also set Thrift-only metadata params
-        String uqm = getParameterIgnoreDefault(DatabricksJdbcUrlParams.USE_QUERY_FOR_METADATA);
-        String tcp =
+        String explicitQueryForMetadata =
+            getParameterIgnoreDefault(DatabricksJdbcUrlParams.USE_QUERY_FOR_METADATA);
+        String explicitCatalogAsPattern =
             getParameterIgnoreDefault(
                 DatabricksJdbcUrlParams.TREAT_METADATA_CATALOG_NAME_AS_PATTERN);
-        if ((uqm != null && uqm.equals("0")) || (tcp != null && tcp.equals("1"))) {
-          LOGGER.info(
+        if ((explicitQueryForMetadata != null && explicitQueryForMetadata.equals("0"))
+            || (explicitCatalogAsPattern != null && explicitCatalogAsPattern.equals("1"))) {
+          LOGGER.warn(
               "UseThriftClient=0 (SEA) is set alongside Thrift-only metadata params "
                   + "(UseQueryForMetadata={}, TreatMetadataCatalogNameAsPattern={}). "
                   + "Honouring SEA — these metadata params will have no effect.",
-              uqm,
-              tcp);
+              explicitQueryForMetadata,
+              explicitCatalogAsPattern);
         }
         return DatabricksClientType.SEA;
       }
