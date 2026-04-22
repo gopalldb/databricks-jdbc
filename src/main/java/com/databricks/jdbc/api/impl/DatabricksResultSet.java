@@ -306,21 +306,8 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     if (parentStatement == null || statementId == null) {
       return;
     }
-
-    // Skip heartbeat when all data is already client-side or server already closed:
-    // - SEA_INLINE (InlineJsonResult): all rows loaded in memory at construction
-    // - No execution result: nothing to fetch
-    // - Update count: no result data to keep alive
-    // - Direct results (CLOSED state): server already closed the operation, data delivered inline
-    if (resultSetType == ResultSetType.SEA_INLINE || executionResult == null) {
+    if (!isHeartbeatEligible()) {
       return;
-    }
-    if (statementType == StatementType.UPDATE) {
-      return;
-    }
-    if (executionStatus != null
-        && executionStatus.getExecutionState() == com.databricks.jdbc.api.ExecutionState.CLOSED) {
-      return; // direct results — server already closed, no heartbeat needed
     }
 
     try {
@@ -388,6 +375,49 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     } catch (Exception e) {
       LOGGER.debug("Failed to stop heartbeat: {}", e.getMessage());
     }
+  }
+
+  /**
+   * Determines whether this result set is eligible for heartbeat polling. Package-visible for
+   * testing.
+   *
+   * <p>Heartbeat is NOT needed when:
+   *
+   * <ul>
+   *   <li>No execution result (nothing to fetch, also covers async PENDING/RUNNING with no data)
+   *   <li>SEA inline (InlineJsonResult): all rows loaded in memory at construction
+   *   <li>Update count (DML): no result rows to keep alive
+   *   <li>Direct results (CLOSED state): server already closed, data fully delivered
+   *   <li>Async execution (PENDING/RUNNING): user controls polling via getExecutionResult()
+   * </ul>
+   */
+  boolean isHeartbeatEligible() {
+    // No execution result — nothing to fetch
+    if (executionResult == null) {
+      return false;
+    }
+    // SEA inline — all data loaded in memory at construction
+    if (resultSetType == ResultSetType.SEA_INLINE) {
+      return false;
+    }
+    // Update count — no result rows
+    if (statementType == StatementType.UPDATE) {
+      return false;
+    }
+    // Check execution state
+    if (executionStatus != null) {
+      com.databricks.jdbc.api.ExecutionState state = executionStatus.getExecutionState();
+      // Direct results — server already closed
+      if (state == com.databricks.jdbc.api.ExecutionState.CLOSED) {
+        return false;
+      }
+      // Async execution — user controls polling
+      if (state == com.databricks.jdbc.api.ExecutionState.PENDING
+          || state == com.databricks.jdbc.api.ExecutionState.RUNNING) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private static TelemetryCollector resolveTelemetryCollector(
