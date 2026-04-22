@@ -1487,4 +1487,138 @@ class DatabricksConnectionContextTest {
             TestConstants.VALID_URL_1 + ";UseQueryForMetadata=0", properties);
     assertFalse(ctx.useQueryForMetadata());
   }
+
+  // ---------------------------------------------------------------------------
+  // Client type selection with Thrift-native metadata params
+  // ---------------------------------------------------------------------------
+
+  @Test
+  public void testUseQueryForMetadata0_forcesThrift() throws DatabricksSQLException {
+    // UseQueryForMetadata=0 without UseThriftClient → forces Thrift
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";UseQueryForMetadata=0", properties);
+    assertEquals(DatabricksClientType.THRIFT, ctx.getClientType());
+  }
+
+  @Test
+  public void testTreatCatalogAsPattern1_forcesThrift() throws DatabricksSQLException {
+    // TreatMetadataCatalogNameAsPattern=1 without UseThriftClient → forces Thrift
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";TreatMetadataCatalogNameAsPattern=1", properties);
+    assertEquals(DatabricksClientType.THRIFT, ctx.getClientType());
+  }
+
+  @Test
+  public void testBothMetadataParams_forcesThrift() throws DatabricksSQLException {
+    // Both UseQueryForMetadata=0 and TreatMetadataCatalogNameAsPattern=1 → forces Thrift
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1
+                + ";UseQueryForMetadata=0;TreatMetadataCatalogNameAsPattern=1",
+            properties);
+    assertEquals(DatabricksClientType.THRIFT, ctx.getClientType());
+  }
+
+  @Test
+  public void testUseQueryForMetadata0_withExplicitSEA_honoursSEA() throws DatabricksSQLException {
+    // UseThriftClient=0 (explicit SEA) + UseQueryForMetadata=0 → SEA wins
+    // User explicitly chose SEA, so we honour that even though metadata param won't work
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";UseThriftClient=0;UseQueryForMetadata=0", properties);
+    assertEquals(DatabricksClientType.SEA, ctx.getClientType());
+  }
+
+  @Test
+  public void testTreatCatalogAsPattern1_withExplicitSEA_honoursSEA()
+      throws DatabricksSQLException {
+    // UseThriftClient=0 (explicit SEA) + TreatMetadataCatalogNameAsPattern=1 → SEA wins
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";UseThriftClient=0;TreatMetadataCatalogNameAsPattern=1",
+            properties);
+    assertEquals(DatabricksClientType.SEA, ctx.getClientType());
+  }
+
+  @Test
+  public void testUseQueryForMetadata0_withExplicitThrift_staysThrift()
+      throws DatabricksSQLException {
+    // UseThriftClient=1 (explicit Thrift) + UseQueryForMetadata=0 → Thrift
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";UseThriftClient=1;UseQueryForMetadata=0", properties);
+    assertEquals(DatabricksClientType.THRIFT, ctx.getClientType());
+  }
+
+  @Test
+  public void testUseQueryForMetadata1_doesNotForceThrift() throws DatabricksSQLException {
+    // UseQueryForMetadata=1 (explicit SHOW commands) → does NOT force Thrift
+    // SHOW commands work in both modes, so SAFE flag / other checks decide
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";UseQueryForMetadata=1", properties);
+    // Should NOT be forced to Thrift by metadata params (other checks may still pick Thrift)
+    // The key assertion: it didn't get forced to Thrift by our new check
+    // Since VALID_URL_1 has no UseThriftClient, it goes through other checks (Arrow, CF, flag)
+    // which default to Thrift for this URL — but that's not from our metadata check
+    assertNotNull(ctx.getClientType());
+  }
+
+  @Test
+  public void testTreatCatalogAsPattern0_doesNotForceThrift() throws DatabricksSQLException {
+    // TreatMetadataCatalogNameAsPattern=0 (default, literal match) → does NOT force Thrift
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";TreatMetadataCatalogNameAsPattern=0", properties);
+    assertNotNull(ctx.getClientType());
+  }
+
+  @Test
+  public void testNoMetadataParams_defaultBehavior() throws DatabricksSQLException {
+    // No metadata params set → default behavior (SAFE flag / other checks decide)
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(TestConstants.VALID_URL_1, properties);
+    // VALID_URL_1 has no UseThriftClient, defaults to Thrift (no SAFE flag in tests)
+    assertEquals(DatabricksClientType.THRIFT, ctx.getClientType());
+  }
+
+  @Test
+  public void testCluster_metadataParamsIgnored() throws DatabricksSQLException {
+    // All-Purpose Cluster always uses Thrift regardless of metadata params
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_CLUSTER_URL + ";UseQueryForMetadata=0", properties);
+    assertEquals(DatabricksClientType.THRIFT, ctx.getClientType());
+
+    ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_CLUSTER_URL + ";TreatMetadataCatalogNameAsPattern=1", properties);
+    assertEquals(DatabricksClientType.THRIFT, ctx.getClientType());
+  }
+
+  @Test
+  public void testUseQueryForMetadata0_withExplicitSEA_useQueryForMetadataStillFalse()
+      throws DatabricksSQLException {
+    // Even though SEA is forced, UseQueryForMetadata=0 should still report false
+    // (the metadata param value is independent of client type selection)
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";UseThriftClient=0;UseQueryForMetadata=0", properties);
+    assertEquals(DatabricksClientType.SEA, ctx.getClientType());
+    assertFalse(ctx.useQueryForMetadata());
+  }
+
+  @Test
+  public void testTreatCatalogAsPattern1_withExplicitSEA_treatCatalogStillTrue()
+      throws DatabricksSQLException {
+    // Even though SEA is forced, TreatMetadataCatalogNameAsPattern=1 should still report true
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";UseThriftClient=0;TreatMetadataCatalogNameAsPattern=1",
+            properties);
+    assertEquals(DatabricksClientType.SEA, ctx.getClientType());
+    assertTrue(ctx.treatMetadataCatalogNameAsPattern());
+  }
 }

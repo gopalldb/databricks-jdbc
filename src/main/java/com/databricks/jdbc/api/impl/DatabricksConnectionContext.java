@@ -459,7 +459,24 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
         return DatabricksClientType.SEA;
       }
     }
-    // Now, user has not provided a value, we will decide based on our checks
+    // Now, user has not provided a value for UseThriftClient, we will decide based on our checks.
+    // If user explicitly requires Thrift-native metadata behavior, stay on Thrift:
+    // - UseQueryForMetadata=0: user wants native Thrift RPCs for metadata (not SHOW commands)
+    // - TreatMetadataCatalogNameAsPattern=1: only works with native Thrift RPCs
+    String explicitUseQueryForMetadata =
+        getParameterIgnoreDefault(DatabricksJdbcUrlParams.USE_QUERY_FOR_METADATA);
+    String explicitTreatCatalogAsPattern =
+        getParameterIgnoreDefault(DatabricksJdbcUrlParams.TREAT_METADATA_CATALOG_NAME_AS_PATTERN);
+    if ((explicitUseQueryForMetadata != null && explicitUseQueryForMetadata.equals("0"))
+        || (explicitTreatCatalogAsPattern != null && explicitTreatCatalogAsPattern.equals("1"))) {
+      LOGGER.debug(
+          "Forcing Thrift client: user requires Thrift-native metadata behavior "
+              + "(UseQueryForMetadata={}, TreatMetadataCatalogNameAsPattern={})",
+          explicitUseQueryForMetadata,
+          explicitTreatCatalogAsPattern);
+      return DatabricksClientType.THRIFT;
+    }
+
     // Check if circuit breaker is open due to recent 429 rate limit failures
     if (SeaCircuitBreakerManager.isCircuitOpen()) {
       long remainingMs = SeaCircuitBreakerManager.getTimeRemainingMs();
