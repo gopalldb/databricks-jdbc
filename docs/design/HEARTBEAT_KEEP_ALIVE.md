@@ -339,10 +339,42 @@ The task:
 4. If the RPC fails (connection error, timeout), increments a consecutive failure counter. After **10 consecutive failures** (~10 minutes at default interval), stops the heartbeat. A single success resets the counter. (Learned from ADBC C# PR #372 — a single transient error like TLS recycling should not permanently kill the heartbeat)
 5. Does NOT throw exceptions — failures are logged, not propagated to the user's thread
 
+### When Heartbeat Starts and Stops
+
+The heartbeat only starts **after** the main thread's execution polling completes and the ResultSet is constructed. During query execution, the driver's own polling loop (200ms interval) keeps the operation alive — the heartbeat is not needed and does not run during this phase.
+
+```
+Execution phase (driver polls):        Result consumption phase (heartbeat polls):
+  executeQuery()                         rs = getResultSet()
+    → client.executeStatement()          heartbeat starts ──────────────┐
+      → poll every 200ms ──────────┐                                    │
+      ← SUCCEEDED                  │     rs.next() ... pause ...        │ heartbeat 60s
+    ← ResultSet created ───────────┘     rs.next() ... pause ...        │ heartbeat 60s
+                                         rs.close() ───────────────────┘ heartbeat stops
+```
+
+### Async Execution: No Heartbeat During Wait
+
+For `executeAsync()`, the user controls polling via `getExecutionResult()`. The heartbeat does **not** run between `executeAsync()` and `getExecutionResult()` because:
+
+1. The user opted into async precisely to control timing
+2. Automatic heartbeat would keep the warehouse alive even if the user abandoned the query
+3. The user has the poll interface — they are responsible for calling `getExecutionResult()` before the statement expires
+
+The heartbeat starts only when the ResultSet is available and the user begins consuming results:
+
+```
+stmt.executeAsync(sql)         ← returns immediately, no heartbeat
+  ... user does other work ...   ← no heartbeat (user's responsibility to poll)
+rs = stmt.getExecutionResult() ← ResultSet created, heartbeat starts
+rs.next() ... pause ...          ← heartbeat keeps alive
+rs.close()                       ← heartbeat stops
+```
+
 ### Lifecycle
 
 ```
-Statement.execute()
+Statement.execute() / getExecutionResult()
     └─▶ ResultSet created
          └─▶ If heartbeat enabled AND result type is eligible:
               startHeartbeat(statementId, heartbeatTask)
@@ -364,11 +396,12 @@ Connection.close()
 
 | Result Type | Cloud Persisted? | Needs Heartbeat? | Reason |
 |-------------|-----------------|-------------------|--------|
-| SEA inline (JSON) | No | **Yes** | Data only on cluster; lost on cluster stop |
-| SEA cloud fetch (Arrow) | Yes | **Optional** | Data in cloud; survives cluster stop. But statement must stay alive for URL refresh |
-| Thrift inline (columnar) | No | **Yes** | Data only on cluster |
-| Thrift cloud fetch | Yes | **Optional** | Same as SEA cloud fetch |
+| SEA inline (JSON) | No | **No** | All data loaded into memory at construction (InlineJsonResult) |
+| SEA cloud fetch (Arrow) | Yes | **Yes** | Statement must stay alive for URL refresh |
+| Thrift inline (columnar) | No | **Yes** | Data fetched on-demand from server; server can evict |
+| Thrift cloud fetch | Yes | **Yes** | Operation handle must stay alive for URL refresh |
 | Direct results (CLOSED state) | N/A | **No** | Server already closed the operation; data fully delivered |
+| Update count (DML) | N/A | **No** | No result rows; execution polling already kept it alive |
 
 ### Configuration
 

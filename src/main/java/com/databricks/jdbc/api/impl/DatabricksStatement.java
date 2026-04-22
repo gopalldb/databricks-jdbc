@@ -679,6 +679,8 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     LOGGER.debug("ResultSet executeAsync() for statement {%s}", sql);
     checkIfClosed();
 
+    // No heartbeat during async wait — the user controls polling via getExecutionResult().
+    // Heartbeat starts later when the ResultSet is constructed (after getExecutionResult()).
     resetForNewExecution();
 
     IDatabricksClient client = connection.getSession().getDatabricksClient();
