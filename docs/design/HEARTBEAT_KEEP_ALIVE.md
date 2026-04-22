@@ -403,6 +403,15 @@ Connection.close()
 | Direct results (CLOSED state) | N/A | **No** | Server already closed the operation; data fully delivered |
 | Update count (DML) | N/A | **No** | No result rows; execution polling already kept it alive |
 
+### Note: Cloud Fetch Prefetch Interaction
+
+For cloud fetch result types (SEA Arrow, Thrift cloud fetch), the `StreamingChunkProvider` and `RemoteChunkProvider` already make background RPCs to download chunks and refresh presigned URLs. These background fetches act as an **implicit heartbeat** — each `FetchResults` or `GetStatementResultChunkN` RPC constitutes server activity.
+
+When both the prefetch threads and the explicit heartbeat are active, the heartbeat is technically redundant. However, we still enable it for cloud fetch because:
+1. The prefetch threads stop once all chunks are downloaded — the heartbeat continues during the gap between "all chunks downloaded" and "user finishes reading"
+2. If the prefetch is paused (e.g., sliding window full, waiting for user to consume), the heartbeat fills the gap
+3. The heartbeat cost is minimal (one lightweight GET/status check per minute)
+
 ### Configuration
 
 New connection parameters:

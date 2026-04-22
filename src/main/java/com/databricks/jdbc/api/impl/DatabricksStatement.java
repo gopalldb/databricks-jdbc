@@ -978,6 +978,16 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     // when the server returns unexpected responses (e.g., WireMock 404 in tests).
     // For direct results, the server already closed the handle.
 
+    // Stop heartbeat for the previous execution before clearing state.
+    // Without this, the old heartbeat (keyed by old statementId) would fail and self-terminate
+    // after 10 consecutive failures — wasteful and noisy in logs.
+    if (statementId != null) {
+      ResultHeartbeatManager mgr = connection.getHeartbeatManager();
+      if (mgr != null) {
+        mgr.stopHeartbeat(statementId);
+      }
+    }
+
     directResultsReceived = false;
 
     // Per JDBC spec, re-executing a Statement implicitly closes the current ResultSet.

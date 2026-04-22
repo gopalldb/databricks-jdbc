@@ -347,17 +347,28 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
                 return;
               }
               int failures = consecutiveFailures.incrementAndGet();
-              LOGGER.debug(
-                  "Heartbeat failed for statement {} (failure {}/{}): {}",
-                  statementId,
-                  failures,
-                  maxConsecutiveFailures,
-                  e.getMessage());
-              if (failures >= maxConsecutiveFailures) {
+              if (failures == 1) {
+                // First failure — log at INFO so users see the initial problem
                 LOGGER.info(
-                    "Heartbeat stopped for statement {} after {} consecutive failures",
+                    "Heartbeat failed for statement {} (first failure): {}",
                     statementId,
-                    failures);
+                    e.getMessage());
+              } else {
+                LOGGER.debug(
+                    "Heartbeat failed for statement {} (failure {}/{}): {}",
+                    statementId,
+                    failures,
+                    maxConsecutiveFailures,
+                    e.getMessage());
+              }
+              if (failures >= maxConsecutiveFailures) {
+                // Terminal failure — log at WARN so it's visible in default log config
+                LOGGER.warn(
+                    "Heartbeat stopped for statement {} after {} consecutive failures. "
+                        + "Server-side results may expire. Last error: {}",
+                    statementId,
+                    failures,
+                    e.getMessage());
                 stopped.set(true);
                 stopHeartbeat();
               }

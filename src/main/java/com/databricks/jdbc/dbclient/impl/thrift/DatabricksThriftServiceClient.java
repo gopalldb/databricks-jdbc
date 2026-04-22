@@ -281,6 +281,12 @@ public class DatabricksThriftServiceClient implements IDatabricksClient, IDatabr
               .setGetProgressUpdate(false);
       TGetOperationStatusResp resp = thriftAccessor.getOperationStatus(statusReq, statementId);
       TOperationState state = resp.getOperationState();
+      if (state == null) {
+        LOGGER.warn(
+            "Heartbeat for statement {} received null operation state, assuming alive",
+            statementId);
+        return true; // assume alive — server returned response but no state
+      }
       // Terminal states mean the operation is no longer alive
       return state != TOperationState.CANCELED_STATE
           && state != TOperationState.CLOSED_STATE
