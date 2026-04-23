@@ -962,12 +962,24 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     noMoreResults = false;
     updateCount = -1;
 
-    // Per JDBC spec, re-execution does not explicitly close the previous server-side
-    // operation handle. The server manages operation handle lifecycle — handles are
-    // cleaned up when the session closes or the server evicts idle operations.
-    // Attempting to close handles here would corrupt Thrift HTTP transport connections
-    // when the server returns unexpected responses (e.g., WireMock 404 in tests).
-    // For direct results, the server already closed the handle.
+    // Close the previous server-side operation if it exists. This prevents resource
+    // leaks when a Statement is re-executed (e.g., PreparedStatement in a loop).
+    // This matches the behavior of pgJDBC, MySQL Connector/J, Trino JDBC, and
+    // Databricks Python SQL Connector — all close the previous operation on re-execute.
+    // Skip if: (1) no previous execution (statementId==null), or
+    //          (2) server already closed the operation (direct results).
+    if (statementId != null && !directResultsReceived) {
+      try {
+        connection.getSession().getDatabricksClient().closeStatement(statementId);
+      } catch (Exception e) {
+        // Don't block re-execution if closing the previous operation fails
+        // (e.g., network error, operation already expired on server)
+        LOGGER.debug(
+            "Failed to close previous server operation {} during re-execution: {}",
+            statementId,
+            e.getMessage());
+      }
+    }
 
     directResultsReceived = false;
 
