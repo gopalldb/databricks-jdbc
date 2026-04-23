@@ -7,12 +7,7 @@
 - Added AI coding agent detection to the User-Agent header. When the driver is invoked by a known AI coding agent (e.g. Claude Code, Cursor, Gemini CLI), `agent/<product>` is appended to the User-Agent string.
 
 ### Updated
-- **[Breaking Change]** Thrift-mode metadata operations (`getTables`, `getColumns`, `getSchemas`, `getFunctions`, `getPrimaryKeys`, `getImportedKeys`, `getCrossReference`) on **SQL Warehouses** now use SQL SHOW commands by default instead of native Thrift RPCs, aligning behavior with Statement Execution API (SEA) mode. All-Purpose Clusters are unaffected and continue using native Thrift RPCs. The `UseQueryForMetadata` connection property default changed from `0` to `1`. To revert to native Thrift RPCs, set `UseQueryForMetadata=0`. Key behavioral changes:
-  - Catalog parameter is now treated as a literal identifier (not a wildcard pattern) per JDBC spec. Use `null` to search across all catalogs.
-  - Methods that previously threw exceptions for null/empty edge-case inputs now return empty result sets.
-  - `getFunctions` now works correctly (was broken via native Thrift RPC).
-  - Result columns (TABLE_CATALOG, etc.) return stored values (lowercase) instead of preserving input case.
-- Connection properties `EnableShowCommandForGetFunctions` and `TreatMetadataCatalogNameAsPattern` are now redundant when `UseQueryForMetadata=1` (the new default).
+- Added support for using SQL SHOW commands for Thrift-mode metadata operations (`getTables`, `getColumns`, `getSchemas`, `getFunctions`, `getPrimaryKeys`, `getImportedKeys`, `getCrossReference`). Enable by setting `UseQueryForMetadata=1`. This aligns Thrift metadata behavior with Statement Execution API (SEA) mode.
 
 ### Fixed
 - Fixed `EnableBatchedInserts` silently falling back to individual execution when table or schema names contain special characters (e.g., hyphens) inside backtick-quoted identifiers. Added a warn log when the fallback occurs.
