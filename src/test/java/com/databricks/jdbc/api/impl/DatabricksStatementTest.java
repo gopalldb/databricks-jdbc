@@ -1141,6 +1141,44 @@ public class DatabricksStatementTest {
   }
 
   @Test
+  public void testReExecutionHandlesTransportErrorGracefully() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    DatabricksResultSet firstResult = mock(DatabricksResultSet.class);
+    DatabricksResultSet secondResult = mock(DatabricksResultSet.class);
+    StatementId firstStatementId = new StatementId("transport-error-stmt-id");
+
+    // closeStatement throws a transport-level error (e.g., unexpected server response,
+    // corrupted framed transport). This is the scarier failure mode — not just "not found"
+    // but a low-level I/O error that could corrupt shared transport state.
+    doThrow(new RuntimeException("HTTP request failed by code: 500, unexpected response"))
+        .when(client)
+        .closeStatement(eq(firstStatementId));
+
+    when(client.executeStatement(
+            eq(STATEMENT),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement),
+            any()))
+        .thenReturn(firstResult)
+        .thenReturn(secondResult);
+
+    statement.executeQuery(STATEMENT);
+    statement.setStatementId(firstStatementId);
+
+    // Re-execution must succeed even with transport-level close failure.
+    // The new execution creates a fresh server operation with a new statementId.
+    assertDoesNotThrow(() -> statement.executeQuery(STATEMENT));
+    assertEquals(secondResult, statement.getResultSet());
+  }
+
+  @Test
   public void testAsyncExecutionResetsStateFromPreviousSyncExecution() throws Exception {
     IDatabricksConnectionContext connectionContext =
         DatabricksConnectionContext.parse(JDBC_URL, new Properties());
