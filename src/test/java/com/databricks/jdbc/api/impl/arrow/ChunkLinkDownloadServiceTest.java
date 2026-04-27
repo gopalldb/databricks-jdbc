@@ -14,6 +14,7 @@ import com.databricks.jdbc.exception.DatabricksValidationException;
 import com.databricks.jdbc.model.core.ChunkLinkFetchResult;
 import com.databricks.jdbc.model.core.ExternalLink;
 import com.databricks.jdbc.model.telemetry.enums.DatabricksDriverErrorCode;
+import com.databricks.sdk.core.DatabricksError;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -125,6 +126,28 @@ class ChunkLinkDownloadServiceTest {
     ExecutionException exception =
         assertThrows(ExecutionException.class, () -> future.get(1, TimeUnit.SECONDS));
     assertEquals(expectedError, exception.getCause());
+  }
+
+  @Test
+  void testGetLinkForChunk_DatabricksError_propagatesAsExecutionException()
+      throws SQLException, ExecutionException, InterruptedException {
+    long chunkIndex = 1L;
+    // DatabricksError is a RuntimeException thrown by the SDK on HTTP errors (e.g. 404)
+    DatabricksError runtimeError = new DatabricksError("404", "Results have expired", 404);
+    when(mockSession.getDatabricksClient()).thenReturn(mockClient);
+    when(mockClient.getResultChunks(eq(mockStatementId), anyLong(), anyLong()))
+        .thenThrow(runtimeError);
+    when(mockChunkMap.get(chunkIndex)).thenReturn(mock(ArrowResultChunk.class));
+
+    ChunkLinkDownloadService<ArrowResultChunk> service =
+        new ChunkLinkDownloadService<>(
+            mockSession, mockStatementId, TOTAL_CHUNKS, mockChunkMap, NEXT_BATCH_START_INDEX);
+
+    CompletableFuture<ExternalLink> future = service.getLinkForChunk(chunkIndex);
+
+    ExecutionException exception =
+        assertThrows(ExecutionException.class, () -> future.get(1, TimeUnit.SECONDS));
+    assertEquals(runtimeError, exception.getCause());
   }
 
   @Test
