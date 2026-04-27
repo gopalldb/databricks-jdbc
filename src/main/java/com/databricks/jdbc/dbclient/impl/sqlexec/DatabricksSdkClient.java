@@ -501,6 +501,13 @@ public class DatabricksSdkClient implements IDatabricksClient {
       req.withHeaders(getHeaders("getStatementResultN"));
       ResultData resultData = apiClient.execute(req, ResultData.class);
       return buildChunkLinkFetchResult(resultData.getExternalLinks());
+    } catch (DatabricksError e) {
+      String errorMessage =
+          String.format(
+              "Error fetching result chunks for statement [%s] chunk [%d] (HTTP %d): %s",
+              statementId, chunkIndex, e.getStatusCode(), e.getMessage());
+      LOGGER.error(errorMessage, e);
+      throw new DatabricksSQLException(errorMessage, e, DatabricksDriverErrorCode.SDK_CLIENT_ERROR);
     } catch (IOException e) {
       String errorMessage = "Error while processing the get result chunk request";
       LOGGER.error(errorMessage, e);
@@ -554,6 +561,13 @@ public class DatabricksSdkClient implements IDatabricksClient {
       Request req = new Request(Request.GET, path, apiClient.serialize(request));
       req.withHeaders(getHeaders("getStatementResultN"));
       return apiClient.execute(req, ResultData.class);
+    } catch (DatabricksError e) {
+      String errorMessage =
+          String.format(
+              "Error fetching result data for statement [%s] chunk [%d] (HTTP %d): %s",
+              statementId, chunkIndex, e.getStatusCode(), e.getMessage());
+      LOGGER.error(errorMessage, e);
+      throw new DatabricksSQLException(errorMessage, e, DatabricksDriverErrorCode.SDK_CLIENT_ERROR);
     } catch (IOException e) {
       String errorMessage = "Error while processing the get result chunk request";
       LOGGER.error(errorMessage, e);

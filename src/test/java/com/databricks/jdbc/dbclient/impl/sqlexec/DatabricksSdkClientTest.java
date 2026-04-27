@@ -1132,4 +1132,46 @@ public class DatabricksSdkClientTest {
                 null,
                 null));
   }
+
+  @Test
+  public void testGetResultChunks_DatabricksError_throwsSQLException() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksSdkClient databricksSdkClient =
+        new DatabricksSdkClient(connectionContext, statementExecutionService, apiClient);
+
+    // Simulate a 404 from the server (result expired)
+    when(apiClient.execute(any(Request.class), eq(ResultData.class)))
+        .thenThrow(new DatabricksError("404", "Results have expired", 404));
+
+    DatabricksSQLException exception =
+        assertThrows(
+            DatabricksSQLException.class,
+            () -> databricksSdkClient.getResultChunks(STATEMENT_ID, 0, 0));
+
+    assertTrue(exception.getMessage().contains("HTTP 404"));
+    assertTrue(exception.getMessage().contains("Results have expired"));
+    assertNotNull(exception.getCause());
+  }
+
+  @Test
+  public void testGetResultChunksData_DatabricksError_throwsSQLException() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksSdkClient databricksSdkClient =
+        new DatabricksSdkClient(connectionContext, statementExecutionService, apiClient);
+
+    // Simulate a 404 from the server (result expired)
+    when(apiClient.execute(any(Request.class), eq(ResultData.class)))
+        .thenThrow(new DatabricksError("404", "Results have expired", 404));
+
+    DatabricksSQLException exception =
+        assertThrows(
+            DatabricksSQLException.class,
+            () -> databricksSdkClient.getResultChunksData(STATEMENT_ID, 0));
+
+    assertTrue(exception.getMessage().contains("HTTP 404"));
+    assertTrue(exception.getMessage().contains("Results have expired"));
+    assertNotNull(exception.getCause());
+  }
 }
