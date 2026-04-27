@@ -296,9 +296,6 @@ public interface IDatabricksConnectionContext {
   /** Returns true if driver should use hybrid results in SQL_EXEC API. */
   boolean isSqlExecHybridResultsEnabled();
 
-  /** Returns true if driver should use direct results in SQL_EXEC API. */
-  boolean isSqlExecDirectResultsEnabled();
-
   /** Returns the Azure tenant ID for the Azure Databricks workspace. */
   String getAzureTenantId();
 
@@ -408,6 +405,9 @@ public interface IDatabricksConnectionContext {
   boolean useQueryForMetadata();
 
   boolean treatMetadataCatalogNameAsPattern();
+
+  /** Returns the timeout in seconds for metadata polling operations. 0 means no timeout. */
+  int getMetadataOperationTimeout();
 
   /** Returns whether batched INSERT optimization is enabled */
   boolean isBatchedInsertsEnabled();

@@ -121,7 +121,9 @@ public enum DatabricksJdbcUrlParams {
   ENABLE_SQL_EXEC_HYBRID_RESULTS(
       "EnableSQLExecHybridResults", "flag to enable hybrid results", "1"),
   ENABLE_SQL_EXEC_DIRECT_RESULTS(
-      "EnableSQLExecDirectResults", "flag to enable direct results", "1"),
+      "EnableSQLExecDirectResults",
+      "Alias for EnableDirectResults. Enables direct results in SQL execution",
+      "1"),
   ENABLE_COMPLEX_DATATYPE_SUPPORT(
       "EnableComplexDatatypeSupport",
       "flag to enable native support of complex data types as java objects",
@@ -176,6 +178,10 @@ public enum DatabricksJdbcUrlParams {
       "TreatMetadataCatalogNameAsPattern",
       "Treat catalog names as patterns in Thrift metadata RPCs. When disabled (default), wildcard characters in catalog names are escaped",
       "0"),
+  METADATA_OPERATION_TIMEOUT(
+      "MetadataOperationTimeout",
+      "Timeout in seconds for metadata polling operations (e.g. GetTables, GetColumns). 0 means no timeout",
+      "300"),
   ENABLE_BATCHED_INSERTS("EnableBatchedInserts", "Enable batched INSERT optimization", "0"),
   ENABLE_SQL_VALIDATION_FOR_IS_VALID(
       "EnableSQLValidationForIsValid",

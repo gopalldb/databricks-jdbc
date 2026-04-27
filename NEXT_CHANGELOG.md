@@ -3,22 +3,24 @@
 ## [Unreleased]
 
 ### Added
-- Added connection property `OAuthWebServerTimeout` to configure the OAuth browser authentication timeout for U2M (user-to-machine) flows, and also updated hardcoded 1-hour timeout to default 120 seconds timeout.
-- Added connection property `EnableOAuthSecretFromPwd` to allow reading the OAuth client secret from the `PWD`/`password` property instead of `OAuth2Secret`. This enables BI tools to mask the secret using their built-in password field handling. When enabled, it will only be read from `PWD`/`password`.
-- Added connection property `UseQueryForMetadata` to use SQL SHOW commands instead of Thrift RPCs for metadata operations (getCatalogs, getSchemas, getTables, getColumns, getFunctions). This fixes incorrect wildcard matching where `_` was treated as a single-character wildcard in Thrift metadata pattern filters.
-- Added connection property `TreatMetadataCatalogNameAsPattern` to control whether catalog names are treated as patterns in Thrift metadata RPCs. When disabled (default), unescaped `_` in catalog names is escaped to prevent single-character wildcard matching. This aligns with JDBC spec which treats catalogName as identifier and not pattern.
+Added connection property `EnableOAuthSecretFromPwd` to allow reading the OAuth client secret from the `PWD`/`password` property instead of `OAuth2Secret`. This enables BI tools to mask the secret using their built-in password field handling. When enabled, it will only be read from `PWD`/`password`.
+- Added `CallableStatement` support with IN parameters. `Connection.prepareCall()` now returns a working `DatabricksCallableStatement` that supports positional parameter binding and execution via `{call proc(?)}` JDBC escape syntax. OUT/INOUT parameters and named parameters throw `SQLFeatureNotSupportedException`.
+- Added AI coding agent detection to the User-Agent header. When the driver is invoked by a known AI coding agent (e.g. Claude Code, Cursor, Gemini CLI), `agent/<product>` is appended to the User-Agent string.
 
 ### Updated
-- Bumped `com.fasterxml.jackson.core:jackson-core` from 2.18.3 to 2.18.6.
-- Fat jar now routes SDK and Apache HTTP client logs through Java Util Logging (JUL), removing the need for external logging libraries.
-- PECOBLR-1121 Arrow patch to circumvent Arrow issues with JDK 16+.
+- Added support for using SQL SHOW commands for Thrift-mode metadata operations (`getTables`, `getColumns`, `getSchemas`, `getFunctions`, `getPrimaryKeys`, `getImportedKeys`, `getCrossReference`). Enable by setting `UseQueryForMetadata=1`. This aligns Thrift metadata behavior with Statement Execution API (SEA) mode.
 
 ### Fixed
-- Fixed `DatabricksParameterMetaData.countParameters` and `DatabricksStatement.trimCommentsAndWhitespaces` with a `SqlCommentParser` utility class.
-- Fixed `rollback()` to throw `SQLException` when called in auto-commit mode (no active transaction), aligning with JDBC spec. Previously it silently sent a ROLLBACK command to the server.
-- Fixed `fetchAutoCommitStateFromServer()` to accept both `"1"`/`"0"` and `"true"`/`"false"` responses from `SET AUTOCOMMIT` query, since different server implementations return different formats.
-- Fixed socket leak in SDK HTTP client that prevented CRaC checkpointing. The SDK's connection pool was not shut down on `connection.close()`, leaving TCP sockets open.
-- Fixed Date fields within complex types (ARRAY, STRUCT, MAP) being returned as epoch day integers instead of proper date values.
+- Fixed `EnableBatchedInserts` silently falling back to individual execution when table or schema names contain special characters (e.g., hyphens) inside backtick-quoted identifiers. Added a warn log when the fallback occurs.
+- Fixed `IntervalConverter` crash (`IllegalArgumentException: Invalid interval metadata`) when INTERVAL columns are returned via CloudFetch. Arrow metadata from CloudFetch uses underscored format (`INTERVAL_YEAR_MONTH`, `INTERVAL_DAY_TIME`) which the driver's regex did not accept.
+- Fixed `Statement` being prematurely closed after queries that return inline results, which prevented re-execution, `getResultSet()`, and `getExecutionResult()` from working. Statements now remain open and reusable until explicitly closed by the caller.
+- Fixed primitive types within complex types (ARRAY, MAP, STRUCT) not being correctly parsed when Arrow serialization uses alternate formats: TIMESTAMP/TIMESTAMP_NTZ as epoch microseconds or component arrays, and BINARY as base64-encoded strings.
+- Fixed `PARSE_SYNTAX_ERROR` for column names containing special characters (e.g., dots) when `EnableBatchedInserts` is enabled, by re-quoting column names with backticks in reconstructed multi-row INSERT statements.
+- Fixed Volume ingestion for SEA mode, which was broken due to statement being closed prematurely.
+- Fixed escaped pattern characters in catalogName for `getSchemas`, as returned catalogName should be unescaped.
+- Fixed `getColumnClassName()` returning null for VARIANT columns in SEA mode by adding VARIANT to the type system.
+- Fixed `getColumns()` returning `DATA_TYPE=0` (NULL) for GEOMETRY/GEOGRAPHY columns in Thrift mode. Now returns `Types.VARCHAR` (12) when geospatial is disabled and `Types.OTHER` (1111) when enabled, consistent with SEA mode.
+- Fixed `getCrossReference()` returning 0 rows when parent args are passed in uppercase. The client-side filter used case-sensitive comparison against server-returned lowercase names.
 
 ---
 *Note: When making changes, please add your change under the appropriate section

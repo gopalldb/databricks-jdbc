@@ -33,7 +33,7 @@ public class DatabricksDriverFeatureFlagsContext {
           DriverUtil.getDriverVersionWithoutOSSSuffix());
   private static final int DEFAULT_TTL_SECONDS = 900; // 15 minutes
   private final String featureFlagEndpoint;
-  private final IDatabricksConnectionContext connectionContext;
+  private volatile IDatabricksConnectionContext connectionContext;
   private final Cache<String, String> featureFlags;
   private final ScheduledExecutorService scheduler =
       Executors.newSingleThreadScheduledExecutor(
@@ -102,6 +102,7 @@ public class DatabricksDriverFeatureFlagsContext {
           .getDatabricksConfig()
           .authenticate()
           .forEach(request::addHeader);
+      connectionContext.getCustomHeaders().forEach(request::addHeader);
       fetchAndSetFlagsFromServer(httpClient, request);
     } catch (Exception e) {
       LOGGER.trace(
@@ -137,6 +138,14 @@ public class DatabricksDriverFeatureFlagsContext {
             response.getStatusLine().getStatusCode());
       }
     }
+  }
+
+  IDatabricksConnectionContext getConnectionContext() {
+    return connectionContext;
+  }
+
+  void updateConnectionContext(IDatabricksConnectionContext newContext) {
+    this.connectionContext = newContext;
   }
 
   public boolean isFeatureEnabled(String name) {
