@@ -33,7 +33,6 @@ import com.databricks.jdbc.model.core.ResultData;
 import com.databricks.jdbc.model.core.ResultManifest;
 import com.databricks.jdbc.model.core.ResultSchema;
 import com.databricks.jdbc.model.core.StatementStatus;
-import com.databricks.jdbc.model.telemetry.enums.DatabricksDriverErrorCode;
 import com.databricks.sdk.core.ApiClient;
 import com.databricks.sdk.core.DatabricksError;
 import com.databricks.sdk.core.http.Request;
@@ -313,8 +312,7 @@ public class DatabricksSdkClientTest {
 
     assertEquals("HY008", exception.getSQLState());
     assertTrue(exception.getMessage().contains("was cancelled"));
-    assertEquals(
-        DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED.ordinal(), exception.getErrorCode());
+    assertEquals(1008, exception.getErrorCode()); // EXECUTE_STATEMENT_CANCELLED stable code
   }
 
   @Test
@@ -366,8 +364,7 @@ public class DatabricksSdkClientTest {
 
     assertEquals("HY008", exception.getSQLState());
     assertTrue(exception.getMessage().contains("was cancelled"));
-    assertEquals(
-        DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED.ordinal(), exception.getErrorCode());
+    assertEquals(1008, exception.getErrorCode()); // EXECUTE_STATEMENT_CANCELLED stable code
   }
 
   @Test

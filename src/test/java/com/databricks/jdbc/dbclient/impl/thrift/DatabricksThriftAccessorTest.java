@@ -20,7 +20,6 @@ import com.databricks.jdbc.exception.DatabricksSQLException;
 import com.databricks.jdbc.exception.DatabricksTimeoutException;
 import com.databricks.jdbc.exception.DatabricksValidationException;
 import com.databricks.jdbc.model.client.thrift.generated.*;
-import com.databricks.jdbc.model.telemetry.enums.DatabricksDriverErrorCode;
 import com.databricks.sdk.core.DatabricksConfig;
 import com.databricks.sdk.service.sql.StatementState;
 import java.sql.SQLException;
@@ -471,8 +470,7 @@ public class DatabricksThriftAccessorTest {
 
     assertEquals("HY008", exception.getSQLState());
     assertTrue(exception.getMessage().contains("was cancelled"));
-    assertEquals(
-        DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED.ordinal(), exception.getErrorCode());
+    assertEquals(1008, exception.getErrorCode()); // EXECUTE_STATEMENT_CANCELLED stable code
   }
 
   @Test
@@ -509,8 +507,7 @@ public class DatabricksThriftAccessorTest {
 
     assertEquals("HY008", exception.getSQLState());
     assertTrue(exception.getMessage().contains("was cancelled"));
-    assertEquals(
-        DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED.ordinal(), exception.getErrorCode());
+    assertEquals(1008, exception.getErrorCode()); // EXECUTE_STATEMENT_CANCELLED stable code
   }
 
   @Test
