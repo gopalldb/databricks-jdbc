@@ -875,8 +875,13 @@ final class DatabricksThriftAccessor {
   private DatabricksSQLException cancelledStatementException(String statementId) {
     String msg = String.format("Statement [%s] was cancelled", statementId);
     LOGGER.info(msg);
+    // silentExceptions=true: cancellations are common in BI tools and should not
+    // emit ERROR-level telemetry
     return new DatabricksSQLException(
-        msg, OPERATION_CANCELLED_SQLSTATE, DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED);
+        msg,
+        OPERATION_CANCELLED_SQLSTATE,
+        DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED,
+        true);
   }
 
   private boolean isErrorStatusCode(TStatus status) {

@@ -426,6 +426,19 @@ public class DatabricksSdkClient implements IDatabricksClient {
       LOGGER.error(errorMessage, e);
       throw new DatabricksSQLException(errorMessage, e, DatabricksDriverErrorCode.SDK_CLIENT_ERROR);
     }
+
+    // Detect cancellation before constructing ResultSet (result data is null when cancelled)
+    if (response.getStatus() != null
+        && response.getStatus().getState() == StatementState.CANCELED) {
+      String cancelMessage = String.format("Statement [%s] was cancelled", statementId);
+      LOGGER.info(cancelMessage);
+      throw new DatabricksSQLException(
+          cancelMessage,
+          OPERATION_CANCELLED_SQLSTATE,
+          DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED,
+          true);
+    }
+
     return new DatabricksResultSet(
         response.getStatus(),
         typedStatementId,
@@ -711,14 +724,16 @@ public class DatabricksSdkClient implements IDatabricksClient {
     StatementState statementState = response.getStatus().getState();
     ServiceError error = response.getStatus().getError();
 
-    // Distinguish cancellation from failure
+    // Distinguish cancellation from failure — silentExceptions=true so cancellations
+    // (common in BI tools like Tableau/Looker) don't emit ERROR-level telemetry
     if (statementState == StatementState.CANCELED) {
       String cancelMessage = String.format("Statement [%s] was cancelled", statementId);
       LOGGER.info(cancelMessage);
       throw new DatabricksSQLException(
           cancelMessage,
           OPERATION_CANCELLED_SQLSTATE,
-          DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED);
+          DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED,
+          true);
     }
 
     String errorMessage =

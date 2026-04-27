@@ -33,6 +33,7 @@ import com.databricks.jdbc.model.core.ResultData;
 import com.databricks.jdbc.model.core.ResultManifest;
 import com.databricks.jdbc.model.core.ResultSchema;
 import com.databricks.jdbc.model.core.StatementStatus;
+import com.databricks.jdbc.model.telemetry.enums.DatabricksDriverErrorCode;
 import com.databricks.sdk.core.ApiClient;
 import com.databricks.sdk.core.DatabricksError;
 import com.databricks.sdk.core.http.Request;
@@ -312,6 +313,8 @@ public class DatabricksSdkClientTest {
 
     assertEquals("HY008", exception.getSQLState());
     assertTrue(exception.getMessage().contains("was cancelled"));
+    assertEquals(
+        DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED.ordinal(), exception.getErrorCode());
   }
 
   @Test
@@ -336,6 +339,35 @@ public class DatabricksSdkClientTest {
 
     assertNotEquals("HY008", exception.getSQLState());
     assertTrue(exception.getMessage().contains("execution failed"));
+  }
+
+  @Test
+  public void testGetStatementResult_CancelledState_ThrowsWithHY008() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksSdkClient databricksSdkClient =
+        new DatabricksSdkClient(connectionContext, statementExecutionService, apiClient);
+
+    // Server returns CANCELED with null result data
+    StatementStatus cancelledStatus = new StatementStatus().setState(StatementState.CANCELED);
+    GetStatementResponse cancelledResponse = new GetStatementResponse();
+    cancelledResponse.setStatus(cancelledStatus);
+    cancelledResponse.setStatementId(STATEMENT_ID.toSQLExecStatementId());
+
+    when(apiClient.execute(any(Request.class), eq(GetStatementResponse.class)))
+        .thenReturn(cancelledResponse);
+
+    DatabricksSQLException exception =
+        assertThrows(
+            DatabricksSQLException.class,
+            () ->
+                databricksSdkClient.getStatementResult(
+                    STATEMENT_ID, mock(DatabricksSession.class), null));
+
+    assertEquals("HY008", exception.getSQLState());
+    assertTrue(exception.getMessage().contains("was cancelled"));
+    assertEquals(
+        DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED.ordinal(), exception.getErrorCode());
   }
 
   @Test

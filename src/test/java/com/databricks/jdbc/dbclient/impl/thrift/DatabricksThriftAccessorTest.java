@@ -20,6 +20,7 @@ import com.databricks.jdbc.exception.DatabricksSQLException;
 import com.databricks.jdbc.exception.DatabricksTimeoutException;
 import com.databricks.jdbc.exception.DatabricksValidationException;
 import com.databricks.jdbc.model.client.thrift.generated.*;
+import com.databricks.jdbc.model.telemetry.enums.DatabricksDriverErrorCode;
 import com.databricks.sdk.core.DatabricksConfig;
 import com.databricks.sdk.service.sql.StatementState;
 import java.sql.SQLException;
@@ -470,6 +471,46 @@ public class DatabricksThriftAccessorTest {
 
     assertEquals("HY008", exception.getSQLState());
     assertTrue(exception.getMessage().contains("was cancelled"));
+    assertEquals(
+        DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED.ordinal(), exception.getErrorCode());
+  }
+
+  @Test
+  void testPollingPath_cancelledDuringExecution_throwsWithHY008() throws Exception {
+    setup(false);
+    TExecuteStatementReq request = new TExecuteStatementReq();
+    TExecuteStatementResp executeResp =
+        new TExecuteStatementResp()
+            .setOperationHandle(tOperationHandle)
+            .setStatus(new TStatus().setStatusCode(TStatusCode.SUCCESS_STATUS));
+    when(thriftClient.ExecuteStatement(request)).thenReturn(executeResp);
+
+    // First poll returns RUNNING, second returns CANCELED (simulates cancel during execution)
+    TGetOperationStatusResp runningResp =
+        new TGetOperationStatusResp()
+            .setStatus(new TStatus().setStatusCode(TStatusCode.STILL_EXECUTING_STATUS))
+            .setOperationState(TOperationState.RUNNING_STATE);
+    TGetOperationStatusResp cancelledResp =
+        new TGetOperationStatusResp()
+            .setStatus(new TStatus().setStatusCode(TStatusCode.SUCCESS_STATUS))
+            .setOperationState(TOperationState.CANCELED_STATE);
+    when(thriftClient.GetOperationStatus(operationStatusReq))
+        .thenReturn(runningResp)
+        .thenReturn(cancelledResp);
+
+    Statement statement = mock(Statement.class);
+    when(parentStatement.getStatement()).thenReturn(statement);
+    when(statement.getQueryTimeout()).thenReturn(0);
+
+    DatabricksSQLException exception =
+        assertThrows(
+            DatabricksSQLException.class,
+            () -> accessor.execute(request, parentStatement, session, StatementType.SQL));
+
+    assertEquals("HY008", exception.getSQLState());
+    assertTrue(exception.getMessage().contains("was cancelled"));
+    assertEquals(
+        DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED.ordinal(), exception.getErrorCode());
   }
 
   @Test
