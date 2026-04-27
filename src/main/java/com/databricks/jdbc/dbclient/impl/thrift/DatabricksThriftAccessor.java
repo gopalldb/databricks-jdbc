@@ -1,5 +1,6 @@
 package com.databricks.jdbc.dbclient.impl.thrift;
 
+import static com.databricks.jdbc.common.DatabricksJdbcConstants.COMMUNICATION_LINK_FAILURE_SQLSTATE;
 import static com.databricks.jdbc.common.DatabricksJdbcConstants.OPERATION_CANCELLED_SQLSTATE;
 import static com.databricks.jdbc.common.DatabricksJdbcConstants.QUERY_EXECUTION_TIMEOUT_SQLSTATE;
 import static com.databricks.jdbc.common.EnvironmentVariables.*;
@@ -329,8 +330,22 @@ final class DatabricksThriftAccessor {
       // Check for timeout before continuing
       timeoutHandler.checkTimeout();
 
-      // Polling for operation status
-      statusResp = getOperationStatus(statusReq, statementId);
+      // Polling for operation status — TException here typically means a transient
+      // HTTP error (e.g. 502 Bad Gateway) after retries were exhausted.
+      try {
+        statusResp = getOperationStatus(statusReq, statementId);
+      } catch (TException e) {
+        String errorMsg =
+            String.format(
+                "Lost connection to server while polling statement [%s]. "
+                    + "This is typically a transient error (e.g. HTTP 502 Bad Gateway) "
+                    + "indicating the cluster was temporarily unavailable. Cause: %s",
+                statementId.toSQLExecStatementId(), e.getMessage());
+        LOGGER.error(errorMsg, e);
+        // Use SQL state 08S01 (communication link failure) so callers can identify
+        // this as a transient/retryable error
+        throw new DatabricksSQLException(errorMsg, e, COMMUNICATION_LINK_FAILURE_SQLSTATE);
+      }
       checkOperationStatusForErrors(statusResp, statementId.toSQLExecStatementId());
       // Save some time if sleep isn't required by breaking.
       if (!shouldContinuePolling(statusResp)) {
@@ -822,11 +837,32 @@ final class DatabricksThriftAccessor {
     // and the operation handle becomes invalid. Without this check, the polling loop would
     // continue indefinitely since operationState may not be set in the response.
     if (statusResp.isSetStatus() && isErrorStatusCode(statusResp.getStatus())) {
+      TStatus status = statusResp.getStatus();
+      // Build a rich error message — errorMessage from the server is often null for
+      // transient failures (502, cluster restart), so include all available fields.
+      String serverError = status.getErrorMessage();
+      if (serverError == null || serverError.isEmpty()) {
+        StringBuilder detail = new StringBuilder();
+        if (status.isSetErrorCode()) {
+          detail.append("errorCode=").append(status.getErrorCode());
+        }
+        if (status.isSetErrorDetailsJson()
+            && status.getErrorDetailsJson() != null
+            && !status.getErrorDetailsJson().isEmpty()) {
+          if (detail.length() > 0) detail.append(", ");
+          detail.append("details=").append(status.getErrorDetailsJson());
+        }
+        if (status.isSetInfoMessages() && status.getInfoMessages() != null) {
+          if (detail.length() > 0) detail.append(", ");
+          detail.append("infoMessages=").append(status.getInfoMessages());
+        }
+        serverError = detail.length() > 0 ? detail.toString() : "no error details from server";
+      }
       String errorMsg =
           String.format(
               "Operation status check failed with status code: [%s] for statement [%s], "
                   + "error: [%s]",
-              statusResp.getStatus().getStatusCode(), statementId, statusResp.getErrorMessage());
+              status.getStatusCode(), statementId, serverError);
       LOGGER.error(errorMsg);
       throw new DatabricksSQLException(
           errorMsg, statusResp.isSetSqlState() ? statusResp.getSqlState() : null);

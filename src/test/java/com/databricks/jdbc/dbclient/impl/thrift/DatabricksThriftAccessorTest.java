@@ -789,12 +789,14 @@ public class DatabricksThriftAccessorTest {
     try {
       accessor.execute(request, parentStatement, session, StatementType.SQL);
       fail("Expected exception due to GetOperationStatus failure");
-    } catch (DatabricksHttpException e) {
+    } catch (DatabricksSQLException e) {
       // Verify that statement ID was set on parent statement despite the failure
       verify(parentStatement).setStatementId(eq(expectedStatementId));
 
-      // Verify the error was from GetOperationStatus
+      // Verify the error indicates a transient communication failure
+      assertTrue(e.getMessage().contains("Lost connection to server while polling"));
       assertTrue(e.getMessage().contains("Failed to get status"));
+      assertEquals("08S01", e.getSQLState());
     }
   }
 
