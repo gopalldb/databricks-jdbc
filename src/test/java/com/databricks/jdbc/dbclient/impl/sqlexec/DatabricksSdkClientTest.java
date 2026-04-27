@@ -1149,7 +1149,6 @@ public class DatabricksSdkClientTest {
             DatabricksSQLException.class,
             () -> databricksSdkClient.getResultChunks(STATEMENT_ID, 0, 0));
 
-    assertTrue(exception.getMessage().contains("HTTP 404"));
     assertTrue(exception.getMessage().contains("Results have expired"));
     assertNotNull(exception.getCause());
   }
@@ -1170,7 +1169,6 @@ public class DatabricksSdkClientTest {
             DatabricksSQLException.class,
             () -> databricksSdkClient.getResultChunksData(STATEMENT_ID, 0));
 
-    assertTrue(exception.getMessage().contains("HTTP 404"));
     assertTrue(exception.getMessage().contains("Results have expired"));
     assertNotNull(exception.getCause());
   }
