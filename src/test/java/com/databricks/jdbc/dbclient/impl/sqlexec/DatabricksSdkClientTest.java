@@ -291,6 +291,54 @@ public class DatabricksSdkClientTest {
   }
 
   @Test
+  public void testHandleFailedExecution_CancelledState_ThrowsWithHY008() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksSdkClient databricksSdkClient =
+        new DatabricksSdkClient(connectionContext, statementExecutionService, apiClient);
+
+    StatementStatus cancelledStatus = new StatementStatus().setState(StatementState.CANCELED);
+    ExecuteStatementResponse response =
+        new ExecuteStatementResponse()
+            .setStatementId(STATEMENT_ID.toSQLExecStatementId())
+            .setStatus(cancelledStatus);
+
+    DatabricksSQLException exception =
+        assertThrows(
+            DatabricksSQLException.class,
+            () ->
+                databricksSdkClient.handleFailedExecution(
+                    response, STATEMENT_ID.toSQLExecStatementId(), STATEMENT));
+
+    assertEquals("HY008", exception.getSQLState());
+    assertTrue(exception.getMessage().contains("was cancelled"));
+  }
+
+  @Test
+  public void testHandleFailedExecution_FailedState_ThrowsWithoutHY008() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksSdkClient databricksSdkClient =
+        new DatabricksSdkClient(connectionContext, statementExecutionService, apiClient);
+
+    StatementStatus failedStatus = new StatementStatus().setState(StatementState.FAILED);
+    ExecuteStatementResponse response =
+        new ExecuteStatementResponse()
+            .setStatementId(STATEMENT_ID.toSQLExecStatementId())
+            .setStatus(failedStatus);
+
+    DatabricksSQLException exception =
+        assertThrows(
+            DatabricksSQLException.class,
+            () ->
+                databricksSdkClient.handleFailedExecution(
+                    response, STATEMENT_ID.toSQLExecStatementId(), STATEMENT));
+
+    assertNotEquals("HY008", exception.getSQLState());
+    assertTrue(exception.getMessage().contains("execution failed"));
+  }
+
+  @Test
   public void testDisposition_arrowAndCloudFetchEnabled_usesExternalLinks() throws Exception {
     setupClientMocks(true, false);
     // Default JDBC_URL has arrow enabled and cloud fetch enabled

@@ -450,6 +450,29 @@ public class DatabricksThriftAccessorTest {
   }
 
   @Test
+  void testGetStatementResult_cancelled_throwsWithHY008() throws Exception {
+    when(connectionContext.getDirectResultMode()).thenReturn(false);
+    accessor = spy(new DatabricksThriftAccessor(connectionContext));
+    doReturn(thriftClient).when(accessor).getThriftClient();
+
+    // Server returns CANCELED_STATE with OK_STATUS and null errorMessage
+    TGetOperationStatusResp cancelledResp =
+        new TGetOperationStatusResp()
+            .setStatus(new TStatus().setStatusCode(TStatusCode.SUCCESS_STATUS))
+            .setOperationState(TOperationState.CANCELED_STATE);
+    when(thriftClient.GetOperationStatus(any(TGetOperationStatusReq.class)))
+        .thenReturn(cancelledResp);
+
+    DatabricksSQLException exception =
+        assertThrows(
+            DatabricksSQLException.class,
+            () -> accessor.getStatementResult(tOperationHandle, null, session));
+
+    assertEquals("HY008", exception.getSQLState());
+    assertTrue(exception.getMessage().contains("was cancelled"));
+  }
+
+  @Test
   void testListPrimaryKeys() throws TException, SQLException, DatabricksValidationException {
     setup(false);
     TGetPrimaryKeysReq request = new TGetPrimaryKeysReq();

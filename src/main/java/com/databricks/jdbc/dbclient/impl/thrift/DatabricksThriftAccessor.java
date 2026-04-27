@@ -1,5 +1,6 @@
 package com.databricks.jdbc.dbclient.impl.thrift;
 
+import static com.databricks.jdbc.common.DatabricksJdbcConstants.OPERATION_CANCELLED_SQLSTATE;
 import static com.databricks.jdbc.common.DatabricksJdbcConstants.QUERY_EXECUTION_TIMEOUT_SQLSTATE;
 import static com.databricks.jdbc.common.EnvironmentVariables.*;
 import static com.databricks.jdbc.common.util.DatabricksThriftUtil.*;
@@ -422,6 +423,9 @@ final class DatabricksThriftAccessor {
     try {
       response = getOperationStatus(request, statementId);
       TOperationState operationState = response.getOperationState();
+      if (operationState == TOperationState.CANCELED_STATE) {
+        throw cancelledStatementException(statementId.toSQLExecStatementId());
+      }
       if (operationState == TOperationState.FINISHED_STATE) {
         verifySuccessStatus(
             response.getStatus(), "getStatementResult", statementId.toSQLExecStatementId());
@@ -828,6 +832,11 @@ final class DatabricksThriftAccessor {
           errorMsg, statusResp.isSetSqlState() ? statusResp.getSqlState() : null);
     }
 
+    if (statusResp.isSetOperationState()
+        && statusResp.getOperationState() == TOperationState.CANCELED_STATE) {
+      throw cancelledStatementException(statementId);
+    }
+
     if (statusResp.isSetOperationState() && isErrorOperationState(statusResp.getOperationState())) {
       String errorMsg =
           String.format(
@@ -861,6 +870,13 @@ final class DatabricksThriftAccessor {
     TSparkDirectResults directResults =
         (TSparkDirectResults) response.getFieldValue(directResultsField);
     return directResults.isSetResultSet() && directResults.isSetResultSetMetadata();
+  }
+
+  private DatabricksSQLException cancelledStatementException(String statementId) {
+    String msg = String.format("Statement [%s] was cancelled", statementId);
+    LOGGER.info(msg);
+    return new DatabricksSQLException(
+        msg, OPERATION_CANCELLED_SQLSTATE, DatabricksDriverErrorCode.EXECUTE_STATEMENT_CANCELLED);
   }
 
   private boolean isErrorStatusCode(TStatus status) {
