@@ -10,6 +10,7 @@
 - Added support for using SQL SHOW commands for Thrift-mode metadata operations (`getTables`, `getColumns`, `getSchemas`, `getFunctions`, `getPrimaryKeys`, `getImportedKeys`, `getCrossReference`). Enable by setting `UseQueryForMetadata=1`. This aligns Thrift metadata behavior with Statement Execution API (SEA) mode.
 
 ### Fixed
+- Improved error messages for cancelled statements: operations cancelled via `Statement.cancel()` or closed connections now return SQL state `HY008` (operation cancelled) instead of generic error codes, making it easier for applications to detect and handle cancellations.
 - Fixed race condition between chunk download error handling and result set close that could cause invalid state transition warnings (`CHUNK_RELEASED -> DOWNLOAD_FAILED`) during Arrow Cloud Fetch operations in resource-constrained environments.
 - Fixed `EnableBatchedInserts` silently falling back to individual execution when table or schema names contain special characters (e.g., hyphens) inside backtick-quoted identifiers. Added a warn log when the fallback occurs.
 - Fixed `IntervalConverter` crash (`IllegalArgumentException: Invalid interval metadata`) when INTERVAL columns are returned via CloudFetch. Arrow metadata from CloudFetch uses underscored format (`INTERVAL_YEAR_MONTH`, `INTERVAL_DAY_TIME`) which the driver's regex did not accept.
