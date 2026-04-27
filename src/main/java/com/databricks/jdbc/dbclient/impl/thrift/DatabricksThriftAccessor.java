@@ -331,22 +331,12 @@ final class DatabricksThriftAccessor {
       // Check for timeout before continuing
       timeoutHandler.checkTimeout();
 
-      // Polling for operation status — TTransportException here means a transport-level
-      // failure (e.g. HTTP 502 Bad Gateway) after retries were exhausted. Other TException
-      // subtypes (TProtocolException, TApplicationException) propagate unchanged.
+      // TTransportException means a transport-level failure (e.g. HTTP 502 Bad Gateway)
+      // after retries were exhausted. Other TException subtypes propagate unchanged.
       try {
         statusResp = getOperationStatus(statusReq, statementId);
       } catch (TTransportException e) {
-        String errorMsg =
-            String.format(
-                "Lost connection to server while polling statement [%s] (%s). "
-                    + "This is typically a transient error (e.g. HTTP 502 Bad Gateway) "
-                    + "indicating the cluster was temporarily unavailable. Cause: %s",
-                statementId.toSQLExecStatementId(), e.getClass().getSimpleName(), e.getMessage());
-        LOGGER.error(errorMsg, e);
-        // Use SQL state 08S01 (communication link failure) so callers can identify
-        // this as a transient/retryable error
-        throw new DatabricksSQLException(errorMsg, e, COMMUNICATION_LINK_FAILURE_SQLSTATE);
+        throw buildTransportFailureException(statementId.toSQLExecStatementId(), e);
       }
       checkOperationStatusForErrors(statusResp, statementId.toSQLExecStatementId());
       // Save some time if sleep isn't required by breaking.
@@ -769,7 +759,11 @@ final class DatabricksThriftAccessor {
             DatabricksDriverErrorCode.OPERATION_TIMEOUT_ERROR);
     while (shouldContinuePolling(statusResp)) {
       metadataTimeoutHandler.checkTimeout();
-      statusResp = getThriftClient().GetOperationStatus(statusReq);
+      try {
+        statusResp = getThriftClient().GetOperationStatus(statusReq);
+      } catch (TTransportException e) {
+        throw buildTransportFailureException(statementId, e);
+      }
       checkOperationStatusForErrors(statusResp, statementId);
       if (!shouldContinuePolling(statusResp)) {
         break;
@@ -839,32 +833,12 @@ final class DatabricksThriftAccessor {
     // and the operation handle becomes invalid. Without this check, the polling loop would
     // continue indefinitely since operationState may not be set in the response.
     if (statusResp.isSetStatus() && isErrorStatusCode(statusResp.getStatus())) {
-      TStatus status = statusResp.getStatus();
-      // Build a rich error message — errorMessage from the server is often null for
-      // transient failures (502, cluster restart), so include all available fields.
-      String serverError = status.getErrorMessage();
-      if (serverError == null || serverError.isEmpty()) {
-        StringBuilder detail = new StringBuilder();
-        if (status.isSetErrorCode()) {
-          detail.append("errorCode=").append(status.getErrorCode());
-        }
-        if (status.isSetErrorDetailsJson()
-            && status.getErrorDetailsJson() != null
-            && !status.getErrorDetailsJson().isEmpty()) {
-          if (detail.length() > 0) detail.append(", ");
-          detail.append("details=").append(status.getErrorDetailsJson());
-        }
-        if (status.isSetInfoMessages() && status.getInfoMessages() != null) {
-          if (detail.length() > 0) detail.append(", ");
-          detail.append("infoMessages=").append(status.getInfoMessages());
-        }
-        serverError = detail.length() > 0 ? detail.toString() : "no error details from server";
-      }
+      String serverError = enrichErrorMessage(statusResp.getStatus());
       String errorMsg =
           String.format(
               "Operation status check failed with status code: [%s] for statement [%s], "
                   + "error: [%s]",
-              status.getStatusCode(), statementId, serverError);
+              statusResp.getStatus().getStatusCode(), statementId, serverError);
       LOGGER.error(errorMsg);
       throw new DatabricksSQLException(
           errorMsg, statusResp.isSetSqlState() ? statusResp.getSqlState() : null);
@@ -876,10 +850,11 @@ final class DatabricksThriftAccessor {
     }
 
     if (statusResp.isSetOperationState() && isErrorOperationState(statusResp.getOperationState())) {
+      String serverError = enrichErrorMessage(statusResp.getStatus());
       String errorMsg =
           String.format(
               "Operation failed with error: [%s] for statement [%s], with response [%s]",
-              statusResp.getErrorMessage(), statementId, statusResp);
+              serverError, statementId, statusResp);
       LOGGER.error(errorMsg);
 
       String sqlState = statusResp.getSqlState();
@@ -891,6 +866,52 @@ final class DatabricksThriftAccessor {
 
       throw new DatabricksSQLException(errorMsg, sqlState);
     }
+  }
+
+  /**
+   * Enriches a null or empty error message from TStatus by including errorCode, errorDetailsJson,
+   * and infoMessages. Returns the original errorMessage if it is already present.
+   */
+  private String enrichErrorMessage(TStatus status) {
+    if (status == null) {
+      return "no error details from server";
+    }
+    String errorMessage = status.getErrorMessage();
+    if (errorMessage != null && !errorMessage.isEmpty()) {
+      return errorMessage;
+    }
+    StringBuilder detail = new StringBuilder();
+    if (status.isSetErrorCode()) {
+      detail.append("errorCode=").append(status.getErrorCode());
+    }
+    if (status.isSetErrorDetailsJson()
+        && status.getErrorDetailsJson() != null
+        && !status.getErrorDetailsJson().isEmpty()) {
+      if (detail.length() > 0) detail.append(", ");
+      detail.append("details=").append(status.getErrorDetailsJson());
+    }
+    if (status.isSetInfoMessages() && status.getInfoMessages() != null) {
+      if (detail.length() > 0) detail.append(", ");
+      detail.append("infoMessages=").append(status.getInfoMessages());
+    }
+    return detail.length() > 0 ? detail.toString() : "no error details from server";
+  }
+
+  /**
+   * Builds a DatabricksSQLException for transport-level failures (e.g. HTTP 502 Bad Gateway) during
+   * polling. Uses SQL state 08S01 (communication link failure) so callers can identify retryable
+   * errors.
+   */
+  private DatabricksSQLException buildTransportFailureException(
+      String statementId, TTransportException e) {
+    String errorMsg =
+        String.format(
+            "Lost connection to server while polling statement [%s] (%s). "
+                + "This is typically a transient error (e.g. HTTP 502 Bad Gateway) "
+                + "indicating the cluster was temporarily unavailable. Cause: %s",
+            statementId, e.getClass().getSimpleName(), e.getMessage());
+    LOGGER.error(errorMsg, e);
+    return new DatabricksSQLException(errorMsg, e, COMMUNICATION_LINK_FAILURE_SQLSTATE);
   }
 
   private boolean shouldContinuePolling(TGetOperationStatusResp statusResp) {
