@@ -35,6 +35,7 @@ import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
 import org.apache.thrift.TFieldIdEnum;
 import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.transport.TTransportException;
 
 final class DatabricksThriftAccessor {
 
@@ -330,17 +331,18 @@ final class DatabricksThriftAccessor {
       // Check for timeout before continuing
       timeoutHandler.checkTimeout();
 
-      // Polling for operation status — TException here typically means a transient
-      // HTTP error (e.g. 502 Bad Gateway) after retries were exhausted.
+      // Polling for operation status — TTransportException here means a transport-level
+      // failure (e.g. HTTP 502 Bad Gateway) after retries were exhausted. Other TException
+      // subtypes (TProtocolException, TApplicationException) propagate unchanged.
       try {
         statusResp = getOperationStatus(statusReq, statementId);
-      } catch (TException e) {
+      } catch (TTransportException e) {
         String errorMsg =
             String.format(
-                "Lost connection to server while polling statement [%s]. "
+                "Lost connection to server while polling statement [%s] (%s). "
                     + "This is typically a transient error (e.g. HTTP 502 Bad Gateway) "
                     + "indicating the cluster was temporarily unavailable. Cause: %s",
-                statementId.toSQLExecStatementId(), e.getMessage());
+                statementId.toSQLExecStatementId(), e.getClass().getSimpleName(), e.getMessage());
         LOGGER.error(errorMsg, e);
         // Use SQL state 08S01 (communication link failure) so callers can identify
         // this as a transient/retryable error
