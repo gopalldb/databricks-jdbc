@@ -546,6 +546,10 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     if (resultSetType == ResultSetType.SEA_INLINE) {
       obj = convertToComplexDataTypesForSEAInline(obj, columnName);
     }
+    // Geospatial types have their own flag — don't gate on complexDatatypeSupport
+    if (isGeospatialType(columnName)) {
+      return obj;
+    }
     return complexDatatypeSupport ? obj : obj.toString();
   }
 
