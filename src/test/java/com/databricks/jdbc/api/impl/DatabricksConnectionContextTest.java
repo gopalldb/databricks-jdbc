@@ -1488,6 +1488,90 @@ class DatabricksConnectionContextTest {
     assertFalse(ctx.useQueryForMetadata());
   }
 
+  @Test
+  public void testUseQueryForMetadata_serverFlagEnabled_warehouseReturnsTrue()
+      throws DatabricksSQLException {
+    // Warehouse URL without explicit UseQueryForMetadata — server flag enabled → true
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext)
+            DatabricksConnectionContext.parse(TestConstants.VALID_URL_1, properties);
+
+    Map<String, String> flags = new HashMap<>();
+    flags.put(
+        "databricks.partnerplatform.clientConfigsFeatureFlags.enableUseQueryForThriftJdbc", "true");
+    DatabricksDriverFeatureFlagsContextFactory.setFeatureFlagsContext(ctx, flags);
+
+    assertTrue(ctx.useQueryForMetadata());
+  }
+
+  @Test
+  public void testUseQueryForMetadata_serverFlagDisabled_warehouseReturnsFalse()
+      throws DatabricksSQLException {
+    // Warehouse URL without explicit UseQueryForMetadata — server flag disabled → false
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext)
+            DatabricksConnectionContext.parse(TestConstants.VALID_URL_1, properties);
+
+    Map<String, String> flags = new HashMap<>();
+    flags.put(
+        "databricks.partnerplatform.clientConfigsFeatureFlags.enableUseQueryForThriftJdbc",
+        "false");
+    DatabricksDriverFeatureFlagsContextFactory.setFeatureFlagsContext(ctx, flags);
+
+    assertFalse(ctx.useQueryForMetadata());
+  }
+
+  @Test
+  public void testUseQueryForMetadata_serverFlagEnabled_clusterIgnored()
+      throws DatabricksSQLException {
+    // All-purpose cluster — server flag should be ignored, always false
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext)
+            DatabricksConnectionContext.parse(TestConstants.VALID_CLUSTER_URL, properties);
+
+    Map<String, String> flags = new HashMap<>();
+    flags.put(
+        "databricks.partnerplatform.clientConfigsFeatureFlags.enableUseQueryForThriftJdbc", "true");
+    DatabricksDriverFeatureFlagsContextFactory.setFeatureFlagsContext(ctx, flags);
+
+    assertFalse(ctx.useQueryForMetadata());
+  }
+
+  @Test
+  public void testUseQueryForMetadata_clientExplicit1_overridesServerFlagDisabled()
+      throws DatabricksSQLException {
+    // Client sets UseQueryForMetadata=1 — should be honoured even if server flag is disabled
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext)
+            DatabricksConnectionContext.parse(
+                TestConstants.VALID_URL_1 + ";UseQueryForMetadata=1", properties);
+
+    Map<String, String> flags = new HashMap<>();
+    flags.put(
+        "databricks.partnerplatform.clientConfigsFeatureFlags.enableUseQueryForThriftJdbc",
+        "false");
+    DatabricksDriverFeatureFlagsContextFactory.setFeatureFlagsContext(ctx, flags);
+
+    assertTrue(ctx.useQueryForMetadata());
+  }
+
+  @Test
+  public void testUseQueryForMetadata_clientExplicit0_overridesServerFlagEnabled()
+      throws DatabricksSQLException {
+    // Client sets UseQueryForMetadata=0 — should be honoured even if server flag is enabled
+    DatabricksConnectionContext ctx =
+        (DatabricksConnectionContext)
+            DatabricksConnectionContext.parse(
+                TestConstants.VALID_URL_1 + ";UseQueryForMetadata=0", properties);
+
+    Map<String, String> flags = new HashMap<>();
+    flags.put(
+        "databricks.partnerplatform.clientConfigsFeatureFlags.enableUseQueryForThriftJdbc", "true");
+    DatabricksDriverFeatureFlagsContextFactory.setFeatureFlagsContext(ctx, flags);
+
+    assertFalse(ctx.useQueryForMetadata());
+  }
+
   // ---------------------------------------------------------------------------
   // Client type selection with Thrift-native metadata params
   // ---------------------------------------------------------------------------
