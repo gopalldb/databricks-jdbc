@@ -45,6 +45,9 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
   private static final String SQL_EXEC_FLAG_NAME =
       "databricks.partnerplatform.clientConfigsFeatureFlags.enableSqlExecForJdbc";
 
+  private static final String USE_QUERY_FOR_THRIFT_FLAG_NAME =
+      "databricks.partnerplatform.clientConfigsFeatureFlags.enableUseQueryForThriftJdbc";
+
   private final String host;
   @VisibleForTesting final int port;
   private final String schema;
@@ -1133,7 +1136,8 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
 
   @Override
   public boolean useQueryForMetadata() {
-    return getParameter(DatabricksJdbcUrlParams.USE_QUERY_FOR_METADATA).equals("1");
+    return resolveFeatureFlag(
+        DatabricksJdbcUrlParams.USE_QUERY_FOR_METADATA, USE_QUERY_FOR_THRIFT_FLAG_NAME);
   }
 
   @Override
@@ -1194,6 +1198,48 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
 
   private String getParameterIgnoreDefault(DatabricksJdbcUrlParams key) {
     return this.parameters.getOrDefault(key.getParamName().toLowerCase(), null);
+  }
+
+  /**
+   * Resolves a boolean feature flag with client-side priority over server-side.
+   *
+   * <p>Priority order:
+   *
+   * <ol>
+   *   <li>Client-side param (explicit user setting in JDBC URL) — honoured unconditionally
+   *   <li>Server-side feature flag (DBSQL warehouses only) — checked if user didn't set the param
+   *   <li>Default value from the param definition
+   * </ol>
+   *
+   * @param clientParam the JDBC URL parameter (e.g. USE_QUERY_FOR_METADATA)
+   * @param serverFlagName the server-side SAFE flag name
+   * @return true if the feature should be enabled
+   */
+  private boolean resolveFeatureFlag(DatabricksJdbcUrlParams clientParam, String serverFlagName) {
+    // Client-side flag has highest priority
+    String explicitValue = getParameterIgnoreDefault(clientParam);
+    if (explicitValue != null) {
+      return explicitValue.equals("1");
+    }
+
+    // For DBSQL (warehouses), check server-side feature flag
+    if (computeResource instanceof Warehouse) {
+      try {
+        if (DatabricksDriverFeatureFlagsContextFactory.getInstance(this)
+            .isFeatureEnabled(serverFlagName)) {
+          LOGGER.debug(
+              "Server-side flag {} is enabled for feature {}",
+              serverFlagName,
+              clientParam.getParamName());
+          return true;
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Failed to check server-side flag {}: {}", serverFlagName, e.getMessage());
+      }
+    }
+
+    // Default from param definition
+    return getParameter(clientParam).equals("1");
   }
 
   private String getParameter(DatabricksJdbcUrlParams key, String defaultValue) {
