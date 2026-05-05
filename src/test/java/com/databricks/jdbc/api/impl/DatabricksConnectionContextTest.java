@@ -1489,6 +1489,59 @@ class DatabricksConnectionContextTest {
   }
 
   // ---------------------------------------------------------------------------
+  // Geospatial flag independence from complex datatype flag
+  // ---------------------------------------------------------------------------
+
+  @Test
+  public void testGeospatialEnabled_complexDisabled() throws DatabricksSQLException {
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";EnableGeoSpatialSupport=1;EnableComplexDatatypeSupport=0",
+            properties);
+    assertTrue(ctx.isGeoSpatialSupportEnabled());
+    assertFalse(ctx.isComplexDatatypeSupportEnabled());
+  }
+
+  @Test
+  public void testGeospatialDisabled_complexEnabled() throws DatabricksSQLException {
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";EnableGeoSpatialSupport=0;EnableComplexDatatypeSupport=1",
+            properties);
+    assertFalse(ctx.isGeoSpatialSupportEnabled());
+    assertTrue(ctx.isComplexDatatypeSupportEnabled());
+  }
+
+  @Test
+  public void testGeospatialAndComplexBothEnabled() throws DatabricksSQLException {
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";EnableGeoSpatialSupport=1;EnableComplexDatatypeSupport=1",
+            properties);
+    assertTrue(ctx.isGeoSpatialSupportEnabled());
+    assertTrue(ctx.isComplexDatatypeSupportEnabled());
+  }
+
+  @Test
+  public void testGeospatialAndComplexBothDisabled() throws DatabricksSQLException {
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(
+            TestConstants.VALID_URL_1 + ";EnableGeoSpatialSupport=0;EnableComplexDatatypeSupport=0",
+            properties);
+    assertFalse(ctx.isGeoSpatialSupportEnabled());
+    assertFalse(ctx.isComplexDatatypeSupportEnabled());
+  }
+
+  @Test
+  public void testGeospatialDefaultDisabled() throws DatabricksSQLException {
+    // Neither flag set — both default to disabled
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(TestConstants.VALID_URL_1, properties);
+    assertFalse(ctx.isGeoSpatialSupportEnabled());
+    assertFalse(ctx.isComplexDatatypeSupportEnabled());
+  }
+
+  // ---------------------------------------------------------------------------
   // Client type selection with Thrift-native metadata params
   // ---------------------------------------------------------------------------
 
