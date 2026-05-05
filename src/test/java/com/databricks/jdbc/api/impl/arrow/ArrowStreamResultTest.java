@@ -410,18 +410,16 @@ public class ArrowStreamResultTest {
   }
 
   @Test
-  public void testGeospatialSupportRequiresComplexDatatypeSupport() throws Exception {
-    // Test that EnableGeoSpatialSupport=1 alone (without EnableComplexDatatypeSupport) doesn't
-    // enable geospatial
+  public void testGeospatialSupportIndependentOfComplexDatatypeSupport() throws Exception {
+    // Geospatial support is independent of complex datatype support — can be enabled alone
     Properties props = new Properties();
     props.setProperty("EnableComplexDatatypeSupport", "0");
     props.setProperty("EnableGeoSpatialSupport", "1");
     IDatabricksConnectionContext connectionContext =
         DatabricksConnectionContextFactory.create(JDBC_URL, props);
 
-    // Verify that geospatial support is disabled because complex datatype support is disabled
     assertFalse(connectionContext.isComplexDatatypeSupportEnabled());
-    assertFalse(connectionContext.isGeoSpatialSupportEnabled());
+    assertTrue(connectionContext.isGeoSpatialSupportEnabled());
   }
 
   @Test
