@@ -195,8 +195,15 @@ public class ArrowStreamResultTest {
     assertTrue(ArrowStreamResult.isComplexType(ColumnInfoTypeName.ARRAY));
     assertTrue(ArrowStreamResult.isComplexType(ColumnInfoTypeName.MAP));
     assertTrue(ArrowStreamResult.isComplexType(ColumnInfoTypeName.STRUCT));
-    assertTrue(ArrowStreamResult.isComplexType(ColumnInfoTypeName.GEOMETRY));
-    assertTrue(ArrowStreamResult.isComplexType(ColumnInfoTypeName.GEOGRAPHY));
+
+    // Geospatial types are NOT complex types — they have independent handling
+    assertFalse(ArrowStreamResult.isComplexType(ColumnInfoTypeName.GEOMETRY));
+    assertFalse(ArrowStreamResult.isComplexType(ColumnInfoTypeName.GEOGRAPHY));
+
+    // Geospatial type check is separate
+    assertTrue(ArrowStreamResult.isGeospatialType(ColumnInfoTypeName.GEOMETRY));
+    assertTrue(ArrowStreamResult.isGeospatialType(ColumnInfoTypeName.GEOGRAPHY));
+    assertFalse(ArrowStreamResult.isGeospatialType(ColumnInfoTypeName.ARRAY));
 
     // Non-complex types should return false
     assertFalse(ArrowStreamResult.isComplexType(ColumnInfoTypeName.INT));
