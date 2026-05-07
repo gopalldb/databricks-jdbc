@@ -5,6 +5,7 @@
 ### Added
 
 ### Updated
+- `EnableGeoSpatialSupport` no longer requires `EnableComplexDatatypeSupport=1`. Geospatial types (GEOMETRY, GEOGRAPHY) can now be enabled independently of complex type support (ARRAY, MAP, STRUCT).
 
 ### Fixed
 
