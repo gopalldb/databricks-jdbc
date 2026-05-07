@@ -345,8 +345,8 @@ public class ArrowStreamResultTest {
 
   @Test
   public void testGeospatialTypeWithGeoSpatialSupportDisabled() throws Exception {
-    // Setup connection context with geospatial support disabled
-    // (EnableComplexDatatypeSupport=1, but EnableGeoSpatialSupport=0)
+    // Setup connection context with geospatial support disabled (EnableGeoSpatialSupport=0)
+    // Complex datatype flag is independent and has no effect on geospatial behavior
     Properties props = new Properties();
     props.setProperty("EnableComplexDatatypeSupport", "1");
     props.setProperty("EnableGeoSpatialSupport", "0");

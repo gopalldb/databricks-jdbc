@@ -193,10 +193,10 @@ public class GeospatialTests {
     }
 
     // Geospatial objects returned only when:
-    // 1. Both EnableGeoSpatialSupport=1 AND EnableComplexDatatypeSupport=1
+    // 1. EnableGeoSpatialSupport=1 (independent of EnableComplexDatatypeSupport)
     // 2. NOT in Thrift + Inline mode
     boolean shouldReturnGeospatialObjects =
-        enableGeoSupport == 1 && enableComplexSupport == 1 && !(useThrift == 1 && enableArrow == 0);
+        enableGeoSupport == 1 && !(useThrift == 1 && enableArrow == 0);
 
     if (shouldReturnGeospatialObjects) {
       validateGeometryAnyEnabled(rs, rsm);
