@@ -403,17 +403,22 @@ public class ArrowStreamResultTest {
   }
 
   @Test
-  public void testGeospatialTypeWithBothFlagsEnabled() throws Exception {
-    // Setup connection context with both complex datatype and geospatial support enabled
+  public void testGeospatialEnabledIndependentlyOfComplexDatatype() throws Exception {
+    // Geospatial can be enabled with or without complex datatype support
     Properties props = new Properties();
     props.setProperty("EnableComplexDatatypeSupport", "1");
     props.setProperty("EnableGeoSpatialSupport", "1");
-    IDatabricksConnectionContext connectionContext =
-        DatabricksConnectionContextFactory.create(JDBC_URL, props);
+    IDatabricksConnectionContext ctx1 = DatabricksConnectionContextFactory.create(JDBC_URL, props);
+    assertTrue(ctx1.isComplexDatatypeSupportEnabled());
+    assertTrue(ctx1.isGeoSpatialSupportEnabled());
 
-    // Verify both flags are enabled
-    assertTrue(connectionContext.isComplexDatatypeSupportEnabled());
-    assertTrue(connectionContext.isGeoSpatialSupportEnabled());
+    // Geospatial enabled without complex datatypes
+    Properties props2 = new Properties();
+    props2.setProperty("EnableComplexDatatypeSupport", "0");
+    props2.setProperty("EnableGeoSpatialSupport", "1");
+    IDatabricksConnectionContext ctx2 = DatabricksConnectionContextFactory.create(JDBC_URL, props2);
+    assertFalse(ctx2.isComplexDatatypeSupportEnabled());
+    assertTrue(ctx2.isGeoSpatialSupportEnabled());
   }
 
   @Test
