@@ -24,6 +24,7 @@ import com.databricks.jdbc.model.client.thrift.generated.TSessionHandle;
 import com.databricks.jdbc.telemetry.latency.DatabricksMetricsTimedProcessor;
 import java.sql.SQLException;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -333,6 +334,27 @@ public class DatabricksSessionTest {
         DatabricksThriftServiceClient.class,
         session.getDatabricksMetadataClient(),
         "Default UseQueryForMetadata=0: warehouse uses native Thrift RPCs for metadata");
+  }
+
+  @Test
+  public void testUseQueryForMetadataEnabledViaServerFlag() throws SQLException {
+    setupWarehouse(true /* useThrift */);
+    // Simulate server-side flag enabling SHOW commands for this warehouse
+    Map<String, String> flags = new HashMap<>();
+    flags.put(
+        "databricks.partnerplatform.clientConfigsFeatureFlags.enableUseQueryForThriftJdbc", "true");
+    DatabricksDriverFeatureFlagsContextFactory.setFeatureFlagsContext(connectionContext, flags);
+
+    assertTrue(connectionContext.useQueryForMetadata());
+    DatabricksSession session = new DatabricksSession(connectionContext, thriftClient);
+    assertInstanceOf(
+        DatabricksMetadataQueryClient.class,
+        session.getDatabricksMetadataClient(),
+        "Server flag enabled: warehouse should use SHOW commands for metadata");
+
+    // Clean up so other tests are not affected
+    DatabricksDriverFeatureFlagsContextFactory.setFeatureFlagsContext(
+        connectionContext, new HashMap<>());
   }
 
   @Test
