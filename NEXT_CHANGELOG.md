@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### BREAKING CHANGES in 3.4.1
+
+1. **`getTables()`: Percent sign (`%`) in catalog argument is now treated as a literal character, not a wildcard.** Previously returned all tables; now returns zero rows unless a catalog named "%" exists. JDBC spec: catalog is an exact-match parameter, not a pattern. Migration: Pass `null` to search all catalogs.
+
+2. **`getColumnTypeName()`: DECIMAL columns now return `"DECIMAL"` without precision/scale** (e.g., `"DECIMAL"` not `"DECIMAL(10,2)"`). Use `getPrecision()` and `getScale()` for numeric constraints. JDBC spec: `getColumnTypeName()` returns the base type name only.
+
+3. **For DBSQL warehouses, metadata operations are now powered by SHOW SQL commands.** SQL Exec API mode already was powered by SHOW commands, now the same is true for Thrift server mode as well. To revert to native Thrift metadata RPCs, set `UseQueryForMetadata` to `0`.
+
 ### Added
 - Added result set heartbeat / keep-alive to prevent server-side result expiry during slow consumption. When enabled via `EnableHeartbeat=1`, the driver periodically polls `GetStatementStatus` (SEA) or `GetOperationStatus` (Thrift) to keep the operation alive while the client reads results. Configurable interval via `HeartbeatIntervalSeconds` (default 60s). Heartbeat automatically stops when results are fully consumed, ResultSet is closed, or the server returns a terminal state. Disabled by default due to cost implications (heartbeats keep the warehouse running).
 

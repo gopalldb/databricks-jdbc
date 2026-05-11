@@ -45,6 +45,9 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
   private static final String SQL_EXEC_FLAG_NAME =
       "databricks.partnerplatform.clientConfigsFeatureFlags.enableSqlExecForJdbc";
 
+  private static final String USE_QUERY_FOR_THRIFT_FLAG_NAME =
+      "databricks.partnerplatform.clientConfigsFeatureFlags.enableUseQueryForThriftJdbc";
+
   private final String host;
   @VisibleForTesting final int port;
   private final String schema;
@@ -1151,7 +1154,8 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
 
   @Override
   public boolean useQueryForMetadata() {
-    return getParameter(DatabricksJdbcUrlParams.USE_QUERY_FOR_METADATA).equals("1");
+    return resolveFeatureFlag(
+        DatabricksJdbcUrlParams.USE_QUERY_FOR_METADATA, USE_QUERY_FOR_THRIFT_FLAG_NAME);
   }
 
   @Override
@@ -1212,6 +1216,59 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
 
   private String getParameterIgnoreDefault(DatabricksJdbcUrlParams key) {
     return this.parameters.getOrDefault(key.getParamName().toLowerCase(), null);
+  }
+
+  /**
+   * Resolves a boolean feature flag with client-side priority over server-side.
+   *
+   * <p>Priority order:
+   *
+   * <ol>
+   *   <li>Client-side param (explicit user setting in JDBC URL) — honoured unconditionally
+   *   <li>Server-side feature flag (DBSQL warehouses only) — checked if user didn't set the param
+   *   <li>Default value from the param definition
+   * </ol>
+   *
+   * @param clientParam the JDBC URL parameter (e.g. USE_QUERY_FOR_METADATA)
+   * @param serverFlagName the server-side SAFE flag name
+   * @return true if the feature should be enabled
+   */
+  private boolean resolveFeatureFlag(DatabricksJdbcUrlParams clientParam, String serverFlagName) {
+    // 1. User explicitly set the param — honour it regardless of compute type
+    String explicitValue = getParameterIgnoreDefault(clientParam);
+    if (explicitValue != null) {
+      return explicitValue.equals("1");
+    }
+
+    // 2. No explicit setting + all-purpose cluster — always false
+    if (!(computeResource instanceof Warehouse)) {
+      return false;
+    }
+
+    // 3. No explicit setting + warehouse — enabled only when BOTH client default
+    //    AND server-side flag agree. This gives a two-key rollout mechanism:
+    //    flip the param default to "1" in the driver AND enable the server flag.
+    boolean clientDefault = getParameter(clientParam).equals("1");
+    boolean serverEnabled = false;
+    try {
+      serverEnabled =
+          DatabricksDriverFeatureFlagsContextFactory.getInstance(this)
+              .isFeatureEnabled(serverFlagName);
+    } catch (Exception e) {
+      LOGGER.debug("Failed to check server-side flag {}: {}", serverFlagName, e.getMessage());
+    }
+
+    if (clientDefault && serverEnabled) {
+      LOGGER.debug(
+          "Feature {} enabled for warehouse: client default={}, server flag {} ={}",
+          clientParam.getParamName(),
+          clientDefault,
+          serverFlagName,
+          serverEnabled);
+      return true;
+    }
+
+    return false;
   }
 
   private String getParameter(DatabricksJdbcUrlParams key, String defaultValue) {
