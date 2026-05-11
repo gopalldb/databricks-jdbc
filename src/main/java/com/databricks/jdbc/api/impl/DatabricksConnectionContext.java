@@ -1214,30 +1214,41 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
    * @return true if the feature should be enabled
    */
   private boolean resolveFeatureFlag(DatabricksJdbcUrlParams clientParam, String serverFlagName) {
-    // Client-side flag has highest priority
+    // 1. User explicitly set the param — honour it regardless of compute type
     String explicitValue = getParameterIgnoreDefault(clientParam);
     if (explicitValue != null) {
       return explicitValue.equals("1");
     }
 
-    // For DBSQL (warehouses), check server-side feature flag
-    if (computeResource instanceof Warehouse) {
-      try {
-        if (DatabricksDriverFeatureFlagsContextFactory.getInstance(this)
-            .isFeatureEnabled(serverFlagName)) {
-          LOGGER.debug(
-              "Server-side flag {} is enabled for feature {}",
-              serverFlagName,
-              clientParam.getParamName());
-          return true;
-        }
-      } catch (Exception e) {
-        LOGGER.debug("Failed to check server-side flag {}: {}", serverFlagName, e.getMessage());
-      }
+    // 2. No explicit setting + all-purpose cluster — always false
+    if (!(computeResource instanceof Warehouse)) {
+      return false;
     }
 
-    // Default from param definition
-    return getParameter(clientParam).equals("1");
+    // 3. No explicit setting + warehouse — enabled only when BOTH client default
+    //    AND server-side flag agree. This gives a two-key rollout mechanism:
+    //    flip the param default to "1" in the driver AND enable the server flag.
+    boolean clientDefault = getParameter(clientParam).equals("1");
+    boolean serverEnabled = false;
+    try {
+      serverEnabled =
+          DatabricksDriverFeatureFlagsContextFactory.getInstance(this)
+              .isFeatureEnabled(serverFlagName);
+    } catch (Exception e) {
+      LOGGER.debug("Failed to check server-side flag {}: {}", serverFlagName, e.getMessage());
+    }
+
+    if (clientDefault && serverEnabled) {
+      LOGGER.debug(
+          "Feature {} enabled for warehouse: client default={}, server flag {} ={}",
+          clientParam.getParamName(),
+          clientDefault,
+          serverFlagName,
+          serverEnabled);
+      return true;
+    }
+
+    return false;
   }
 
   private String getParameter(DatabricksJdbcUrlParams key, String defaultValue) {
