@@ -23,6 +23,7 @@ import com.databricks.jdbc.exception.DatabricksTemporaryRedirectException;
 import com.databricks.jdbc.model.client.thrift.generated.TSessionHandle;
 import com.databricks.jdbc.telemetry.latency.DatabricksMetricsTimedProcessor;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,8 +49,11 @@ public class DatabricksSessionTest {
   static void setupWarehouse(boolean useThrift) throws SQLException {
     String url = useThrift ? WAREHOUSE_JDBC_URL : WAREHOUSE_JDBC_URL_WITH_SEA;
     connectionContext = DatabricksConnectionContext.parse(url, new Properties());
-    // Clear any stale feature flags from other tests to prevent test contamination
-    DatabricksDriverFeatureFlagsContextFactory.removeInstance(connectionContext);
+    // Override feature flags with empty map to prevent test contamination from
+    // other test classes (e.g. DatabricksConnectionContextTest) that set flags
+    // on the shared static DatabricksDriverFeatureFlagsContextFactory.
+    DatabricksDriverFeatureFlagsContextFactory.setFeatureFlagsContext(
+        connectionContext, new HashMap<>());
   }
 
   private void setupCluster() throws SQLException {
