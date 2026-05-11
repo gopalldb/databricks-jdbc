@@ -67,11 +67,10 @@ public class DatabricksConnection implements IDatabricksConnection, IDatabricksC
 
   private static ResultHeartbeatManager createHeartbeatManager(
       IDatabricksConnectionContext connectionContext) {
-    if (connectionContext instanceof DatabricksConnectionContext) {
-      DatabricksConnectionContext ctx = (DatabricksConnectionContext) connectionContext;
-      if (ctx.isHeartbeatEnabled()) {
-        return new ResultHeartbeatManager(ctx.getHeartbeatIntervalSeconds());
-      }
+    // H6 fix: Use interface methods instead of instanceof check so mocks and
+    // alternate implementations can also enable heartbeat
+    if (connectionContext.isHeartbeatEnabled()) {
+      return new ResultHeartbeatManager(connectionContext.getHeartbeatIntervalSeconds());
     }
     return null;
   }
@@ -435,12 +434,14 @@ public class DatabricksConnection implements IDatabricksConnection, IDatabricksC
   @Override
   public void close() throws SQLException {
     LOGGER.debug("public void close()");
+    // H5 fix: Shutdown heartbeat FIRST — prevents RPCs on closing connections and
+    // ensures shutdown runs even if statement.close() throws
+    if (heartbeatManager != null) {
+      heartbeatManager.shutdown();
+    }
     for (IDatabricksStatementInternal statement : statementSet) {
       statement.close(false);
       statementSet.remove(statement);
-    }
-    if (heartbeatManager != null) {
-      heartbeatManager.shutdown();
     }
     this.session.close();
     TelemetryClientFactory.getInstance().closeTelemetryClient(connectionContext);

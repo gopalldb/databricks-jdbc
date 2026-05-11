@@ -193,6 +193,7 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     this.cachedTelemetryCollector = resolveTelemetryCollector(parentStatement);
     this.isClosed = false;
     this.wasNull = false;
+    startHeartbeatIfEnabled(); // C4 fix: Thrift result sets also need heartbeat
   }
 
   /* Constructing results for getUDTs, getTypeInfo, getProcedures metadata calls */
@@ -311,74 +312,89 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     }
 
     try {
-      DatabricksConnection conn =
-          (DatabricksConnection) parentStatement.getStatement().getConnection();
+      // C3 fix: Use JDBC unwrap() to handle pooled connection wrappers (HikariCP, DBCP)
+      java.sql.Connection rawConn = parentStatement.getStatement().getConnection();
+      DatabricksConnection conn;
+      if (rawConn instanceof DatabricksConnection) {
+        conn = (DatabricksConnection) rawConn;
+      } else if (rawConn.isWrapperFor(DatabricksConnection.class)) {
+        conn = rawConn.unwrap(DatabricksConnection.class);
+      } else {
+        LOGGER.debug("Cannot start heartbeat: connection is not a DatabricksConnection");
+        return;
+      }
+
       ResultHeartbeatManager mgr = conn.getHeartbeatManager();
       if (mgr == null) {
         return; // heartbeat not enabled
       }
 
-      IDatabricksClient client = conn.getSession().getDatabricksClient();
+      // C2 fix: Capture only what the lambda needs — avoid capturing 'this' to prevent
+      // abandoned ResultSets from keeping the warehouse alive via heartbeat.
+      final IDatabricksClient client = conn.getSession().getDatabricksClient();
+      final StatementId capturedStatementId = this.statementId;
       final int maxConsecutiveFailures = 10;
       final java.util.concurrent.atomic.AtomicInteger consecutiveFailures =
           new java.util.concurrent.atomic.AtomicInteger(0);
-      // Get the stopped flag from the manager — shared between the heartbeat task and
-      // stopHeartbeat(). Prevents RPC on a just-closed client/session: stopHeartbeat sets
-      // the flag before cancel(false), so an in-flight tick sees it and skips the RPC.
-      final java.util.concurrent.atomic.AtomicBoolean stopped = mgr.getStoppedFlag(statementId);
+      // C1 fix: Read the stopped flag from the manager on each tick instead of pre-capturing.
+      // Pre-capturing caused an orphan-flag bug: startHeartbeat() internally calls
+      // stopHeartbeat() which removes and replaces the flag, leaving the lambda with a
+      // permanently-true reference. Reading from the manager each tick always gets the
+      // current flag.
+      final ResultHeartbeatManager capturedMgr = mgr;
 
       Runnable heartbeatTask =
           () -> {
+            // C1 fix: read current flag each tick
+            java.util.concurrent.atomic.AtomicBoolean stopped =
+                capturedMgr.getStoppedFlag(capturedStatementId);
             if (stopped.get()) {
               return; // client/session may be closed, skip RPC
             }
             try {
-              boolean alive = client.checkStatementAlive(statementId);
+              boolean alive = client.checkStatementAlive(capturedStatementId);
               consecutiveFailures.set(0); // reset on success
               if (!alive) {
                 LOGGER.info(
-                    "Heartbeat detected terminal state for statement {}, stopping", statementId);
-                stopped.set(true);
-                stopHeartbeat();
+                    "Heartbeat detected terminal state for statement {}, stopping",
+                    capturedStatementId);
+                capturedMgr.stopHeartbeat(capturedStatementId);
               }
             } catch (Exception e) {
-              // If stopped was set during the RPC (connection closing), don't count as failure
-              if (stopped.get()) {
+              // Re-read flag — may have been set during the RPC (connection closing)
+              if (capturedMgr.getStoppedFlag(capturedStatementId).get()) {
                 return;
               }
               int failures = consecutiveFailures.incrementAndGet();
               if (failures == 1) {
-                // First failure — log at INFO so users see the initial problem
                 LOGGER.info(
                     "Heartbeat failed for statement {} (first failure): {}",
-                    statementId,
+                    capturedStatementId,
                     e.getMessage());
               } else {
                 LOGGER.debug(
                     "Heartbeat failed for statement {} (failure {}/{}): {}",
-                    statementId,
+                    capturedStatementId,
                     failures,
                     maxConsecutiveFailures,
                     e.getMessage());
               }
               if (failures >= maxConsecutiveFailures) {
-                // Terminal failure — log at WARN so it's visible in default log config
                 LOGGER.warn(
                     "Heartbeat stopped for statement {} after {} consecutive failures. "
                         + "Server-side results may expire. Last error: {}",
-                    statementId,
+                    capturedStatementId,
                     failures,
                     e.getMessage());
-                stopped.set(true);
-                stopHeartbeat();
+                capturedMgr.stopHeartbeat(capturedStatementId);
               }
             }
           };
 
-      mgr.startHeartbeat(statementId, heartbeatTask);
+      mgr.startHeartbeat(capturedStatementId, heartbeatTask);
       LOGGER.debug(
           "Heartbeat started for statement {} (resultType={}, interval={}s)",
-          statementId,
+          capturedStatementId,
           resultSetType,
           mgr.getIntervalSeconds());
     } catch (Exception e) {

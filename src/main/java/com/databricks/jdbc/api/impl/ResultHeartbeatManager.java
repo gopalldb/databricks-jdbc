@@ -69,7 +69,7 @@ class ResultHeartbeatManager {
         "Starting heartbeat for statement {} with interval {}s", statementId, intervalSeconds);
 
     ScheduledFuture<?> future =
-        scheduler.scheduleAtFixedRate(
+        scheduler.scheduleWithFixedDelay(
             heartbeatTask, intervalSeconds, intervalSeconds, TimeUnit.SECONDS);
     activeHeartbeats.put(statementId, future);
   }

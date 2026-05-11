@@ -253,6 +253,15 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     LOGGER.debug("public void cancel()");
     checkIfClosed();
 
+    // H11 fix: Stop heartbeat on cancel — server operation is being cancelled,
+    // no point continuing to poll it
+    if (statementId != null) {
+      ResultHeartbeatManager mgr = connection.getHeartbeatManager();
+      if (mgr != null) {
+        mgr.stopHeartbeat(statementId);
+      }
+    }
+
     if (statementId != null && !directResultsReceived) {
       this.connection.getSession().getDatabricksClient().cancelStatement(statementId);
       DatabricksThreadContextHolder.clearStatementInfo();
