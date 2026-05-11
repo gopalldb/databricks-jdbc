@@ -233,7 +233,8 @@ public class DatabricksThriftUtil {
 
     String typeText = getTypeTextFromTypeDesc(columnDesc.getTypeDesc());
 
-    if (arrowMetadata != null && isComplexType(arrowMetadata)) {
+    if (arrowMetadata != null
+        && (isComplexType(arrowMetadata) || isGeospatialType(arrowMetadata))) {
       typeText = arrowMetadata;
       if (arrowMetadata.startsWith(GEOMETRY)) {
         columnInfoTypeName = ColumnInfoTypeName.GEOMETRY;
