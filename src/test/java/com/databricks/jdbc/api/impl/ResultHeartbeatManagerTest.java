@@ -247,4 +247,129 @@ public class ResultHeartbeatManagerTest {
     manager.startHeartbeat(new StatementId("min-interval"), ran::countDown);
     assertDoesNotThrow(() -> ran.await(5, TimeUnit.SECONDS));
   }
+
+  // =========================================================================
+  // Concurrent start for same statementId — orphaned future must not happen
+  // =========================================================================
+
+  @Test
+  void testConcurrentStartForSameStatementId_replacesCleanly() throws Exception {
+    manager = new ResultHeartbeatManager(1);
+    StatementId id = new StatementId("concurrent");
+    AtomicInteger firstCount = new AtomicInteger(0);
+    AtomicInteger secondCount = new AtomicInteger(0);
+    CountDownLatch secondRan = new CountDownLatch(1);
+
+    // Start first heartbeat
+    manager.startHeartbeat(id, firstCount::incrementAndGet);
+    // Immediately replace with second — first should be stopped
+    manager.startHeartbeat(
+        id,
+        () -> {
+          secondCount.incrementAndGet();
+          secondRan.countDown();
+        });
+
+    assertEquals(1, manager.getActiveHeartbeatCount(), "Only one heartbeat should be active");
+    assertTrue(secondRan.await(5, TimeUnit.SECONDS), "Second heartbeat should fire");
+
+    // Wait a bit more, then verify second is the one running
+    Thread.sleep(2000);
+    assertTrue(secondCount.get() >= 1, "Second task should have run");
+    // First task may have run once before replacement, but should not keep running
+    int firstSnapshot = firstCount.get();
+    Thread.sleep(1500);
+    assertEquals(firstSnapshot, firstCount.get(), "First task should not run after replacement");
+  }
+
+  // =========================================================================
+  // getStoppedFlag race with stop — flag must not be recreated after stop
+  // =========================================================================
+
+  @Test
+  void testGetStoppedFlagAfterStop_returnsSentinel() {
+    manager = new ResultHeartbeatManager(60);
+    StatementId id = new StatementId("sentinel-test");
+
+    manager.startHeartbeat(id, () -> {});
+    // Flag should be false while active
+    assertFalse(manager.getStoppedFlag(id).get());
+
+    manager.stopHeartbeat(id);
+    // After stop, getStoppedFlag should return a true sentinel, NOT recreate a false flag
+    AtomicBoolean flag = manager.getStoppedFlag(id);
+    assertTrue(flag.get(), "Flag after stop should be true (sentinel)");
+
+    // Calling getStoppedFlag again should still return true — no new false flag created
+    assertTrue(manager.getStoppedFlag(id).get(), "Repeated call should still be true");
+  }
+
+  @Test
+  void testStoppedFlagRaceWithScheduledTick_noLeakedRpc() throws Exception {
+    manager = new ResultHeartbeatManager(1);
+    StatementId id = new StatementId("race-sentinel");
+    AtomicInteger rpcCount = new AtomicInteger(0);
+    CountDownLatch firstTick = new CountDownLatch(1);
+
+    // Task checks stopped flag from manager each tick (like production code)
+    manager.startHeartbeat(
+        id,
+        () -> {
+          AtomicBoolean stopped = manager.getStoppedFlag(id);
+          if (!stopped.get()) {
+            rpcCount.incrementAndGet();
+          }
+          firstTick.countDown();
+        });
+
+    assertTrue(firstTick.await(5, TimeUnit.SECONDS), "First tick should fire");
+    int countBeforeStop = rpcCount.get();
+    assertTrue(countBeforeStop >= 1, "At least one RPC should have fired");
+
+    // Stop — after this, getStoppedFlag should return sentinel true
+    manager.stopHeartbeat(id);
+    assertTrue(manager.getStoppedFlag(id).get(), "Flag should be true after stop");
+
+    // Wait and verify no more RPCs fire
+    Thread.sleep(2000);
+    assertEquals(
+        countBeforeStop,
+        rpcCount.get(),
+        "No RPCs should fire after stop (sentinel prevents recreation)");
+  }
+
+  // =========================================================================
+  // Heartbeat continues past cancel to close — verify no leaked RPCs
+  // =========================================================================
+
+  @Test
+  void testStopThenShutdown_noLeakedRpcs() throws Exception {
+    manager = new ResultHeartbeatManager(1);
+    StatementId id = new StatementId("cancel-to-close");
+    AtomicInteger rpcCount = new AtomicInteger(0);
+    CountDownLatch firstTick = new CountDownLatch(1);
+
+    manager.startHeartbeat(
+        id,
+        () -> {
+          if (!manager.getStoppedFlag(id).get()) {
+            rpcCount.incrementAndGet();
+          }
+          firstTick.countDown();
+        });
+
+    assertTrue(firstTick.await(5, TimeUnit.SECONDS));
+
+    // Simulate Statement.cancel() stopping heartbeat
+    manager.stopHeartbeat(id);
+    int countAfterCancel = rpcCount.get();
+
+    // Simulate Connection.close() shutting down manager
+    manager.shutdown();
+
+    // Wait and verify no more RPCs
+    Thread.sleep(1500);
+    assertEquals(countAfterCancel, rpcCount.get(), "No RPCs should fire after stop + shutdown");
+    assertTrue(manager.isShutdown());
+  }
 }
