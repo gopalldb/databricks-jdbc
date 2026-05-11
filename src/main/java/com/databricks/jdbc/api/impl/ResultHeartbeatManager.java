@@ -33,13 +33,23 @@ class ResultHeartbeatManager {
   private final Map<StatementId, ScheduledFuture<?>> activeHeartbeats = new ConcurrentHashMap<>();
   private final Map<StatementId, java.util.concurrent.atomic.AtomicBoolean> stoppedFlags =
       new ConcurrentHashMap<>();
+
+  /** Sentinel returned by getStoppedFlag when the flag has been removed (already stopped). */
+  private static final java.util.concurrent.atomic.AtomicBoolean ALREADY_STOPPED =
+      new java.util.concurrent.atomic.AtomicBoolean(true);
+
   private final int intervalSeconds;
   private volatile boolean isShutdown = false;
+
+  // Small pool to prevent one blocked heartbeat RPC from starving others on the same connection.
+  // A connection with multiple active statements needs concurrent heartbeat ticks.
+  private static final int HEARTBEAT_THREAD_POOL_SIZE = 2;
 
   ResultHeartbeatManager(int intervalSeconds) {
     this.intervalSeconds = intervalSeconds;
     this.scheduler =
-        Executors.newSingleThreadScheduledExecutor(
+        Executors.newScheduledThreadPool(
+            HEARTBEAT_THREAD_POOL_SIZE,
             r -> {
               Thread t = new Thread(r, "databricks-jdbc-heartbeat");
               t.setDaemon(true);
@@ -62,8 +72,8 @@ class ResultHeartbeatManager {
     // Stop any existing heartbeat for this statement (e.g., re-execution)
     stopHeartbeat(statementId);
 
-    // Reset the stopped flag for the new heartbeat
-    getStoppedFlag(statementId).set(false);
+    // Create a fresh stopped flag for the new heartbeat
+    resetStoppedFlag(statementId);
 
     LOGGER.debug(
         "Starting heartbeat for statement {} with interval {}s", statementId, intervalSeconds);
@@ -97,12 +107,21 @@ class ResultHeartbeatManager {
   }
 
   /**
-   * Returns a stopped flag for the given statement. The heartbeat task should check this before
-   * each RPC to avoid calling a closed client/session.
+   * Returns the stopped flag for the given statement, or a sentinel ALREADY_STOPPED if the flag has
+   * been removed (i.e., stopHeartbeat was already called). Uses get() instead of computeIfAbsent()
+   * to prevent re-creating a false flag after stopHeartbeat() removed it.
    */
   java.util.concurrent.atomic.AtomicBoolean getStoppedFlag(StatementId statementId) {
-    return stoppedFlags.computeIfAbsent(
-        statementId, k -> new java.util.concurrent.atomic.AtomicBoolean(false));
+    java.util.concurrent.atomic.AtomicBoolean flag = stoppedFlags.get(statementId);
+    return flag != null ? flag : ALREADY_STOPPED;
+  }
+
+  /**
+   * Creates or resets the stopped flag for a statement. Called only from startHeartbeat() when
+   * setting up a new heartbeat — not from the heartbeat task itself.
+   */
+  private void resetStoppedFlag(StatementId statementId) {
+    stoppedFlags.put(statementId, new java.util.concurrent.atomic.AtomicBoolean(false));
   }
 
   /** Stops all heartbeats and shuts down the scheduler. Called on Connection.close(). */
@@ -121,9 +140,14 @@ class ResultHeartbeatManager {
     }
     activeHeartbeats.clear();
 
+    // Wait for in-flight RPCs to complete. 10s gives reasonable headroom for HTTP
+    // timeouts to fire first (~300s connection timeout won't be an issue here since
+    // stopped flags are already set, so RPCs will short-circuit on next check).
+    // If tasks don't finish in time, shutdownNow() sends interrupts.
     scheduler.shutdown();
     try {
-      if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+      if (!scheduler.awaitTermination(10, TimeUnit.SECONDS)) {
+        LOGGER.debug("Heartbeat tasks did not terminate in 10s, forcing shutdown");
         scheduler.shutdownNow();
       }
     } catch (InterruptedException e) {

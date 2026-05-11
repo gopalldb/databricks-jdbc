@@ -286,6 +286,11 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
       cachedTelemetryCollector.recordResultSetIteration(
           statementId.toSQLExecStatementId(), resultSetMetaData.getChunkCount(), hasNext);
     }
+    // Stop heartbeat when all rows consumed. This is reactive — the heartbeat continues
+    // even if all data is already prefetched client-side (e.g., small Thrift inline results).
+    // A proactive check (chunkProvider.isStreamingComplete()) would be more efficient but
+    // requires deeper integration with the chunk download pipeline. For now, the server-side
+    // checkStatementAlive() returning false for terminal states provides a secondary safety net.
     if (!hasNext) {
       stopHeartbeat();
     }
@@ -331,6 +336,9 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
 
       // C2 fix: Capture only what the lambda needs — avoid capturing 'this' to prevent
       // abandoned ResultSets from keeping the warehouse alive via heartbeat.
+      // Note: capturing 'client' retains a reference to the session/connection. If the
+      // connection is GC'd without close(), heartbeat RPCs will fail and self-stop after
+      // maxConsecutiveFailures (10 ticks, ~10 min at 60s interval). Acceptable tradeoff.
       final IDatabricksClient client = conn.getSession().getDatabricksClient();
       final StatementId capturedStatementId = this.statementId;
       final int maxConsecutiveFailures = 10;
