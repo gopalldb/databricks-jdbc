@@ -1788,5 +1788,91 @@ public class DatabricksStatementTest {
         .closeStatement(STATEMENT_ID);
 
     assertDoesNotThrow(() -> statement.closeServerOperation());
+
+    // Flag should NOT be set on failure — Statement.close() should retry
+    verify(client, times(1)).closeStatement(STATEMENT_ID);
+    // The second closeServerOperation call should retry since flag wasn't set
+    reset(client); // clear the throw stub
+    statement.closeServerOperation();
+    verify(client, times(1)).closeStatement(STATEMENT_ID);
+  }
+
+  @Test
+  public void testCloseServerOperation_cancelSkipsAfterProactiveClose() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+    statement.setStatementId(STATEMENT_ID);
+
+    // Proactively close server operation
+    statement.closeServerOperation();
+    verify(client, times(1)).closeStatement(STATEMENT_ID);
+
+    // cancel() should be a no-op — server operation already closed
+    statement.cancel();
+    verify(client, never()).cancelStatement(any(StatementId.class));
+  }
+
+  @Test
+  public void testCloseServerOperation_getExecutionResultReturnsCachedAfterClose()
+      throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+    statement.setStatementId(STATEMENT_ID);
+    // Set resultSet field via reflection to simulate executeQuery having run
+    java.lang.reflect.Field rsField = DatabricksStatement.class.getDeclaredField("resultSet");
+    rsField.setAccessible(true);
+    rsField.set(statement, resultSet);
+
+    // Proactively close server operation
+    statement.closeServerOperation();
+
+    // getExecutionResult() should return cached result, not make RPC
+    ResultSet cached = statement.getExecutionResult();
+    assertNotNull(cached);
+    assertEquals(resultSet, cached);
+    verify(client, never())
+        .getStatementResult(any(StatementId.class), any(IDatabricksSession.class), any());
+  }
+
+  @Test
+  public void testStatementReusableAfterProactiveClose() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContext.parse(JDBC_URL, new Properties());
+    DatabricksConnection connection = new DatabricksConnection(connectionContext, client);
+    DatabricksStatement statement = new DatabricksStatement(connection);
+
+    when(client.executeStatement(
+            eq(STATEMENT),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement),
+            any()))
+        .thenReturn(resultSet);
+
+    // First execution
+    statement.executeQuery(STATEMENT);
+    statement.closeServerOperation();
+    assertFalse(statement.isClosed(), "Statement should stay open after proactive close");
+
+    // Re-execute — should work, flag reset by resetForNewExecution
+    statement.executeQuery(STATEMENT);
+    assertFalse(statement.isClosed());
+
+    // Both executions should have called executeStatement
+    verify(client, times(2))
+        .executeStatement(
+            eq(STATEMENT),
+            eq(new Warehouse(WAREHOUSE_ID)),
+            eq(new HashMap<>()),
+            eq(StatementType.QUERY),
+            any(IDatabricksSession.class),
+            eq(statement),
+            any());
   }
 }
