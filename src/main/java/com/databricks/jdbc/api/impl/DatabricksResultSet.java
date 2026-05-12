@@ -286,6 +286,14 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     if (!hasNext) {
       // All rows consumed — proactively close server operation to release resources.
       // The client-side Statement remains open for reuse.
+      //
+      // Invariant: by the time next() returns false, the execution result has already
+      // fetched all data from the server (all chunks downloaded for CloudFetch, all
+      // batches fetched for Thrift streaming). No further server RPCs are needed for
+      // data retrieval. This means:
+      // - CloudFetch link refresh is not needed (all links already resolved)
+      // - Lazy getUpdateCount() works because row data is already client-side
+      // - getMoreResults() calling resultSet.close() is safe (server op already closing)
       closeServerOperation();
     }
     return hasNext;
