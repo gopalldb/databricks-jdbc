@@ -252,12 +252,11 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     LOGGER.debug("public void cancel()");
     checkIfClosed();
 
-    if (statementId != null && !directResultsReceived) {
+    if (statementId != null && !directResultsReceived && !serverOperationClosed) {
       this.connection.getSession().getDatabricksClient().cancelStatement(statementId);
       DatabricksThreadContextHolder.clearStatementInfo();
-    } else if (directResultsReceived) {
-      String warningMsg =
-          "Statement's server operation was already closed (direct results); cancel has no effect.";
+    } else if (directResultsReceived || serverOperationClosed) {
+      String warningMsg = "Statement's server operation was already closed; cancel has no effect.";
       LOGGER.debug(warningMsg);
       warnings = WarningUtil.addWarning(warnings, warningMsg);
     } else {
@@ -700,17 +699,18 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
           "No execution available for statement", DatabricksDriverErrorCode.INPUT_VALIDATION_ERROR);
     }
 
-    // For direct results, the server already closed the operation — making an RPC
-    // would return "not found". Return the cached result set instead.
-    if (directResultsReceived) {
+    // For direct results or proactively closed operations, the server operation is gone —
+    // making an RPC would return "not found". Return the cached result set instead.
+    if (directResultsReceived || serverOperationClosed) {
       if (resultSet != null) {
         LOGGER.debug(
-            "Returning cached result for statement {} (direct results received)", statementId);
+            "Returning cached result for statement {} (server operation already closed)",
+            statementId);
         return resultSet;
       }
       throw new DatabricksSQLException(
-          "Direct results were received but no result set is available. "
-              + "The server closed the operation and no further results can be fetched.",
+          "Server operation was already closed and no result set is available. "
+              + "No further results can be fetched.",
           DatabricksDriverErrorCode.INVALID_STATE);
     }
 
