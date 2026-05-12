@@ -973,16 +973,20 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     }
     try {
       this.connection.getSession().getDatabricksClient().closeStatement(statementId);
+      // Only mark closed on success — if the RPC fails (transient network error),
+      // Statement.close() should retry the closeStatement RPC rather than skip it,
+      // to avoid leaving the server operation alive until session timeout.
+      this.serverOperationClosed = true;
       LOGGER.debug(
           "Proactively closed server operation for statement {} (results consumed)", statementId);
     } catch (Exception e) {
-      // Best-effort — don't fail the user's iteration/close for a server cleanup failure
+      // Best-effort — don't fail the user's iteration/close for a server cleanup failure.
+      // serverOperationClosed stays false so Statement.close() will retry the RPC.
       LOGGER.debug(
           "Failed to proactively close server operation for statement {}: {}",
           statementId,
           e.getMessage());
     }
-    this.serverOperationClosed = true;
   }
 
   /**
