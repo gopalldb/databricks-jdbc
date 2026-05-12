@@ -1005,10 +1005,10 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     // when the server returns unexpected responses (e.g., WireMock 404 in tests).
     // For direct results, the server already closed the handle.
 
-    directResultsReceived = false;
-    serverOperationClosed = false;
-
     // Per JDBC spec, re-executing a Statement implicitly closes the current ResultSet.
+    // Close BEFORE resetting flags — resultSet.close() → closeServerOperation() needs
+    // to see the current directResultsReceived/serverOperationClosed state to decide
+    // whether to send closeStatement RPC.
     if (resultSet != null) {
       try {
         resultSet.close();
@@ -1017,6 +1017,10 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
       }
       resultSet = null;
     }
+
+    // Reset flags AFTER closing old ResultSet
+    directResultsReceived = false;
+    serverOperationClosed = false;
 
     // Null out statementId so that if the new execution fails before setStatementId(),
     // close() takes the statementId==null branch instead of sending closeStatement(stale-id)

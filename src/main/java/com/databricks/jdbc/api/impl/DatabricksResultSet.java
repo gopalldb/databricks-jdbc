@@ -283,12 +283,11 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
       cachedTelemetryCollector.recordResultSetIteration(
           statementId.toSQLExecStatementId(), resultSetMetaData.getChunkCount(), hasNext);
     }
-    // Note: we do NOT proactively close the server operation when next() returns false.
-    // While all data is client-side at this point, closing here is too aggressive:
-    // - Batch execution reuses the statement and the early close can break subsequent commands
-    // - WireMock fake service stubs are consumed by the extra closeStatement RPC
-    // - The explicit ResultSet.close() is the safer signal for proactive server close
-    // Server operation is closed proactively only in close() below.
+    if (!hasNext) {
+      // All rows consumed — proactively close server operation to release resources.
+      // The client-side Statement remains open for reuse.
+      closeServerOperation();
+    }
     return hasNext;
   }
 
