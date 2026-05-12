@@ -283,19 +283,12 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
       cachedTelemetryCollector.recordResultSetIteration(
           statementId.toSQLExecStatementId(), resultSetMetaData.getChunkCount(), hasNext);
     }
-    if (!hasNext) {
-      // All rows consumed — proactively close server operation to release resources.
-      // The client-side Statement remains open for reuse.
-      //
-      // Invariant: by the time next() returns false, the execution result has already
-      // fetched all data from the server (all chunks downloaded for CloudFetch, all
-      // batches fetched for Thrift streaming). No further server RPCs are needed for
-      // data retrieval. This means:
-      // - CloudFetch link refresh is not needed (all links already resolved)
-      // - Lazy getUpdateCount() works because row data is already client-side
-      // - getMoreResults() calling resultSet.close() is safe (server op already closing)
-      closeServerOperation();
-    }
+    // Note: we do NOT proactively close the server operation when next() returns false.
+    // While all data is client-side at this point, closing here is too aggressive:
+    // - Batch execution reuses the statement and the early close can break subsequent commands
+    // - WireMock fake service stubs are consumed by the extra closeStatement RPC
+    // - The explicit ResultSet.close() is the safer signal for proactive server close
+    // Server operation is closed proactively only in close() below.
     return hasNext;
   }
 
