@@ -14,7 +14,7 @@
 
 ### Updated
 - `EnableGeoSpatialSupport` no longer requires `EnableComplexDatatypeSupport=1`. Geospatial types (GEOMETRY, GEOGRAPHY) can now be enabled independently of complex type support (ARRAY, MAP, STRUCT).
-- Server-side operations are now closed proactively when all results are consumed (`next()` returns false) or `ResultSet.close()` is called. This releases server resources and reduces warehouse cost without closing the client-side Statement, which remains reusable. Subsequent `Statement.close()` skips the server RPC (already closed).
+- Server-side operations are now closed proactively when all results are consumed (`next()` returns false) or `ResultSet.close()` is called, improving resource utilization. The client-side Statement remains open and reusable for re-execution.
 
 ### Fixed
 
