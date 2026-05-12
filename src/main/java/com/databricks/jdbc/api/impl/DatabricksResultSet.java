@@ -283,15 +283,29 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
       cachedTelemetryCollector.recordResultSetIteration(
           statementId.toSQLExecStatementId(), resultSetMetaData.getChunkCount(), hasNext);
     }
+    if (!hasNext) {
+      // All rows consumed — proactively close server operation to release resources.
+      // The client-side Statement remains open for reuse.
+      closeServerOperation();
+    }
     return hasNext;
   }
 
   @Override
   public void close() throws DatabricksSQLException {
+    // Proactively close server operation when ResultSet is closed explicitly.
+    closeServerOperation();
     isClosed = true;
     this.executionResult.close();
     if (parentStatement != null) {
       parentStatement.handleResultSetClose(this);
+    }
+  }
+
+  /** Proactively closes the server-side operation via the parent statement. */
+  private void closeServerOperation() {
+    if (parentStatement instanceof DatabricksStatement) {
+      ((DatabricksStatement) parentStatement).closeServerOperation();
     }
   }
 
