@@ -1492,4 +1492,46 @@ public class DatabricksResultSetTest {
     // executionResult.next() should have been called exactly 3 times
     verify(mockedExecutionResult, times(3)).next();
   }
+
+  @Test
+  void testNextMaxRowsWithEmptyResultSet() throws Exception {
+    // maxRows > 0 but the underlying result set is empty; next() should return false immediately
+    when(mockedExecutionResult.next()).thenReturn(false);
+    DatabricksResultSet resultSet = getResultSetWithMaxRows(5, mockedExecutionResult);
+
+    assertFalse(resultSet.next(), "next() should return false on an empty result set");
+    assertFalse(
+        resultSet.next(),
+        "next() should still return false on subsequent calls to an empty result set");
+    // executionResult.next() should have been called because rowsReturned (0) < maxRows (5)
+    verify(mockedExecutionResult, times(2)).next();
+  }
+
+  @Test
+  void testNextMaxRowsGreaterThanActualRows() throws Exception {
+    // maxRows=10 but only 3 rows exist; result set should be naturally exhausted before the limit
+    when(mockedExecutionResult.next()).thenReturn(true, true, true, false);
+    DatabricksResultSet resultSet = getResultSetWithMaxRows(10, mockedExecutionResult);
+
+    assertTrue(resultSet.next()); // row 1
+    assertTrue(resultSet.next()); // row 2
+    assertTrue(resultSet.next()); // row 3
+    assertFalse(resultSet.next(), "next() should return false when data is exhausted before limit");
+  }
+
+  @Test
+  void testNextMaxRowsIdempotenceAfterLimit() throws Exception {
+    // Calling next() many times after the limit is reached should always return false
+    when(mockedExecutionResult.next()).thenReturn(true);
+    DatabricksResultSet resultSet = getResultSetWithMaxRows(2, mockedExecutionResult);
+
+    assertTrue(resultSet.next()); // row 1
+    assertTrue(resultSet.next()); // row 2 (limit reached)
+    // All subsequent calls must consistently return false (idempotent behavior)
+    for (int i = 0; i < 10; i++) {
+      assertFalse(resultSet.next(), "next() must return false on repeated call #" + (i + 1));
+    }
+    // executionResult.next() should have been called exactly 2 times (the limit)
+    verify(mockedExecutionResult, times(2)).next();
+  }
 }

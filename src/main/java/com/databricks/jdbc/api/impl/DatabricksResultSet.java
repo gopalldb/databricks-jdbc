@@ -290,13 +290,26 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     this.wasNull = false;
   }
 
+  /**
+   * Advances the cursor to the next row of the result set. Returns {@code false} when no more rows
+   * are available or when the client-side {@code maxRows} limit has been reached.
+   *
+   * <p>{@code rowsReturned} tracks how many rows have been delivered to the caller through this
+   * ResultSet instance. It is only incremented during normal (non-DML-counting) iteration and
+   * assumes single-threaded access, which is the standard JDBC contract.
+   *
+   * @return {@code true} if the new current row is valid; {@code false} if there are no more rows
+   * @throws SQLException if the result set is closed or an error occurs
+   */
   @Override
   public boolean next() throws SQLException {
     checkIfClosed();
     // Client-side maxRows truncation: stop before delegating to the underlying result
     // implementation when the limit has been reached. This is skipped during
     // getUpdateCount() internal iteration (countingUpdateRows) to avoid breaking DML
-    // row counting. Per-implementation maxRows enforcement is retained as defense-in-depth.
+    // row counting. Individual result-set implementations (e.g. StreamingInlineArrowResult,
+    // StreamingColumnarResult) also enforce maxRows independently as defense-in-depth,
+    // so truncation still works even if this central check is somehow bypassed.
     if (maxRowsLimit > 0 && rowsReturned >= maxRowsLimit && !countingUpdateRows) {
       LOGGER.debug(
           "maxRows limit ({}) reached; returning false from next() after {} rows",
@@ -305,6 +318,9 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
       return false;
     }
     boolean hasNext = this.executionResult.next();
+    // Only count rows for customer iteration, not internal DML counting
+    // (getUpdateCount() sets countingUpdateRows=true to iterate over affected-row counts
+    // without inflating the user-visible row counter).
     if (hasNext && !countingUpdateRows) {
       rowsReturned++;
     }
