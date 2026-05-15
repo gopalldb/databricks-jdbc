@@ -82,6 +82,15 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
   // for the lifetime of a result set.
   private final TelemetryCollector cachedTelemetryCollector;
 
+  // Client-side maxRows enforcement. This provides a single, implementation-agnostic
+  // truncation point in next(). Per-implementation maxRows enforcement (e.g. in
+  // StreamingInlineArrowResult, StreamingColumnarResult) is retained as defense-in-depth.
+  private final long maxRowsLimit;
+  private long rowsReturned = 0;
+  // Flag to bypass maxRows check during getUpdateCount() internal iteration,
+  // which calls next() to sum affected-row counts for DML statements.
+  private boolean countingUpdateRows = false;
+
   // Constructor for SEA result set
   public DatabricksResultSet(
       StatementStatus statementStatus,
@@ -121,6 +130,7 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     this.updateCount = null;
     this.parentStatement = parentStatement;
     this.cachedTelemetryCollector = resolveTelemetryCollector(parentStatement);
+    this.maxRowsLimit = resolveMaxRowsLimit(parentStatement);
     this.isClosed = false;
     this.wasNull = false;
   }
@@ -142,6 +152,7 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     this.updateCount = null;
     this.parentStatement = parentStatement;
     this.cachedTelemetryCollector = resolveTelemetryCollector(parentStatement);
+    this.maxRowsLimit = resolveMaxRowsLimit(parentStatement);
     this.isClosed = false;
     this.wasNull = false;
     this.complexDatatypeSupport = complexDatatypeSupport;
@@ -189,6 +200,7 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     this.updateCount = null;
     this.parentStatement = parentStatement;
     this.cachedTelemetryCollector = resolveTelemetryCollector(parentStatement);
+    this.maxRowsLimit = resolveMaxRowsLimit(parentStatement);
     this.isClosed = false;
     this.wasNull = false;
   }
@@ -220,6 +232,7 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     this.updateCount = null;
     this.parentStatement = null;
     this.cachedTelemetryCollector = null;
+    this.maxRowsLimit = 0;
     this.isClosed = false;
     this.wasNull = false;
   }
@@ -251,6 +264,7 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     this.updateCount = null;
     this.parentStatement = null;
     this.cachedTelemetryCollector = null;
+    this.maxRowsLimit = 0;
     this.isClosed = false;
     this.wasNull = false;
   }
@@ -271,6 +285,7 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     this.updateCount = null;
     this.parentStatement = null;
     this.cachedTelemetryCollector = null;
+    this.maxRowsLimit = 0;
     this.isClosed = false;
     this.wasNull = false;
   }
@@ -278,7 +293,21 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
   @Override
   public boolean next() throws SQLException {
     checkIfClosed();
+    // Client-side maxRows truncation: stop before delegating to the underlying result
+    // implementation when the limit has been reached. This is skipped during
+    // getUpdateCount() internal iteration (countingUpdateRows) to avoid breaking DML
+    // row counting. Per-implementation maxRows enforcement is retained as defense-in-depth.
+    if (maxRowsLimit > 0 && rowsReturned >= maxRowsLimit && !countingUpdateRows) {
+      LOGGER.debug(
+          "maxRows limit ({}) reached; returning false from next() after {} rows",
+          maxRowsLimit,
+          rowsReturned);
+      return false;
+    }
     boolean hasNext = this.executionResult.next();
+    if (hasNext && !countingUpdateRows) {
+      rowsReturned++;
+    }
     if (cachedTelemetryCollector != null) {
       cachedTelemetryCollector.recordResultSetIteration(
           statementId.toSQLExecStatementId(), resultSetMetaData.getChunkCount(), hasNext);
@@ -310,6 +339,17 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
       LOGGER.trace("Error resolving telemetry collector: {}", e.getMessage());
     }
     return null;
+  }
+
+  private static long resolveMaxRowsLimit(IDatabricksStatementInternal parentStatement) {
+    try {
+      if (parentStatement != null) {
+        return parentStatement.getMaxRows();
+      }
+    } catch (Exception e) {
+      LOGGER.trace("Error resolving maxRows limit: {}", e.getMessage());
+    }
+    return 0;
   }
 
   @Override
@@ -1949,8 +1989,13 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
       updateCount = 0L;
     } else if (hasUpdateCount()) {
       long rowsUpdated = 0;
-      while (next()) {
-        rowsUpdated += this.getLong(AFFECTED_ROWS_COUNT);
+      countingUpdateRows = true;
+      try {
+        while (next()) {
+          rowsUpdated += this.getLong(AFFECTED_ROWS_COUNT);
+        }
+      } finally {
+        countingUpdateRows = false;
       }
       updateCount = rowsUpdated;
     } else {
