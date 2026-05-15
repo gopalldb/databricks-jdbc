@@ -1534,4 +1534,34 @@ public class DatabricksResultSetTest {
     // executionResult.next() should have been called exactly 2 times (the limit)
     verify(mockedExecutionResult, times(2)).next();
   }
+
+  @Test
+  void testGetUpdateCountBypassesMaxRows() throws Exception {
+    // Mock an UPDATE result set with maxRows=2 but 5 affected rows across 5 result rows.
+    // getUpdateCount() should sum all 5 rows (returning 5), proving the
+    // countingUpdateRows flag bypasses the maxRows limit during internal iteration.
+    InlineJsonResult mockExec = mock(InlineJsonResult.class);
+    when(mockExec.next()).thenReturn(true, true, true, true, true, false);
+    when(mockExec.getObject(0)).thenReturn(1L, 1L, 1L, 1L, 1L);
+
+    DatabricksResultSetMetaData mockMeta = mock(DatabricksResultSetMetaData.class);
+    when(mockMeta.getColumnType(1)).thenReturn(Types.BIGINT);
+    when(mockMeta.getColumnNameIndex(AFFECTED_ROWS_COUNT)).thenReturn(1);
+
+    IDatabricksStatementInternal stmt = mock(IDatabricksStatementInternal.class);
+    when(stmt.getMaxRows()).thenReturn(2);
+
+    DatabricksResultSet resultSet =
+        new DatabricksResultSet(
+            new StatementStatus().setState(StatementState.SUCCEEDED),
+            STATEMENT_ID,
+            StatementType.UPDATE,
+            stmt,
+            mockExec,
+            mockMeta,
+            false);
+
+    // getUpdateCount() must iterate all 5 rows despite maxRows=2
+    assertEquals(5L, resultSet.getUpdateCount());
+  }
 }
