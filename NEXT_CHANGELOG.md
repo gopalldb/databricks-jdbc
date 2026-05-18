@@ -1,18 +1,48 @@
 # NEXT CHANGELOG
 
-## [Unreleased]
+## 3.4.1
 
-### BREAKING CHANGES in 3.4.1
+### BREAKING CHANGES — Metadata JDBC Spec Compliance
 
-1. **`getTables()`: Percent sign (`%`) in catalog argument is now treated as a literal character, not a wildcard.** Previously returned all tables; now returns zero rows unless a catalog named "%" exists. JDBC spec: catalog is an exact-match parameter, not a pattern. Migration: Pass `null` to search all catalogs.
+This release unifies metadata behavior across Thrift and SQL Exec API backends
+using SQL SHOW commands for all metadata operations on SQL warehouses. Several
+non-spec-compliant behaviors have been corrected. Review the changes below before
+upgrading. These changes do not affect metadata on All-Purpose Clusters.
 
-2. **`getColumnTypeName()`: DECIMAL columns now return `"DECIMAL"` without precision/scale** (e.g., `"DECIMAL"` not `"DECIMAL(10,2)"`). Use `getPrecision()` and `getScale()` for numeric constraints. JDBC spec: `getColumnTypeName()` returns the base type name only.
+* **`getTables`/`getColumns`/`getSchemas`: Catalog parameter is now treated as
+  an exact-match identifier per JDBC spec.** Passing `%` or wildcard patterns as
+  catalog previously returned results across all catalogs; now returns zero rows.
+  Use `null` to search all catalogs.
 
-3. **For DBSQL warehouses, metadata operations are now powered by SHOW SQL commands.** SQL Exec API mode already was powered by SHOW commands, now the same is true for Thrift server mode as well. To revert to native Thrift metadata RPCs, set `UseQueryForMetadata` to `0`.
+* **`getTables` with empty types array: Now returns zero rows per JDBC spec.**
+  Previously ignored the empty array and returned all table types. Use `null` to
+  return all types.
 
-4. **Native geospatial type support (`GEOMETRY` and `GEOGRAPHY`) is now enabled by default.** `getObject()` now returns `IGeometry`/`IGeography` instances instead of EWKT strings. Set `EnableGeoSpatialSupport=0` to restore the previous behavior.
+* **`getColumnTypeName()` for DECIMAL: Now returns `"DECIMAL"` without
+  precision/scale suffix.** Use `getPrecision()` and `getScale()` to retrieve
+  numeric constraints.
 
-### Added
+* **`getSchemas`: Now includes `information_schema` in results.** Excludes
+  `global_temp` schema (previously returned by Thrift for all catalogs).
+
+* **`getPrimaryKeys`/`getImportedKeys`/`getCrossReference` with non-existent
+  catalog, schema, or table: Now returns empty `ResultSet` instead of throwing
+  `SQLException`.**
+
+* **`getImportedKeys` `UPDATE_RULE`/`DELETE_RULE`: Now returns `3` (`NO_ACTION`)
+  instead of `0` (`CASCADE`) for Thrift, and `3` instead of `null` for SEA.**
+  This reflects that Unity Catalog foreign keys are informational and non-enforced.
+
+* **Native geospatial type support (`GEOMETRY` and `GEOGRAPHY`) is now enabled
+  by default.** `getObject()` now returns `IGeometry`/`IGeography` instances
+  instead of EWKT strings. Set `EnableGeoSpatialSupport=0` to restore the
+  previous behavior.
+
+### Enhancements & New Features
+
+* Metadata operations now use SQL SHOW commands for both Thrift and SEA backends,
+  ensuring consistent behavior for SQL warehouses regardless of underlying
+  protocol. To revert to native Thrift metadata RPCs, set `UseQueryForMetadata=0`.
 
 ### Updated
 - `EnableGeoSpatialSupport` no longer requires `EnableComplexDatatypeSupport=1`. Geospatial types (GEOMETRY, GEOGRAPHY) can now be enabled independently of complex type support (ARRAY, MAP, STRUCT).
