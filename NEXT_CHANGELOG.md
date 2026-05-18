@@ -12,6 +12,8 @@
 
 4. **Native geospatial type support (`GEOMETRY` and `GEOGRAPHY`) is now enabled by default.** `getObject()` now returns `IGeometry`/`IGeography` instances instead of EWKT strings. Set `EnableGeoSpatialSupport=0` to restore the previous behavior.
 
+5. **`EnableArrow` connection property is deprecated and ignored.** Arrow serialization is now always enabled. Setting `EnableArrow=0` previously disabled Arrow and forced columnar/JSON inline results; this value is now ignored and a deprecation warning is logged. For JSON inline results with SEA, disable CloudFetch via `EnableQueryResultDownload=0`. The only exception is AIX platforms, where `EnableArrow` is still honoured due to known Arrow native library compatibility issues.
+
 ### Added
 
 ### Updated

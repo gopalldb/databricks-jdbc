@@ -351,10 +351,11 @@ class DatabricksConnectionContextTest {
         (DatabricksConnectionContext)
             DatabricksConnectionContext.parse(TestConstants.VALID_URL_5, properties);
     assertTrue(connectionContext.shouldEnableArrow());
+    // EnableArrow=0 is deprecated and ignored on non-AIX platforms — always returns true
     connectionContext =
         (DatabricksConnectionContext)
             DatabricksConnectionContext.parse(TestConstants.VALID_URL_7, properties);
-    assertFalse(connectionContext.shouldEnableArrow());
+    assertTrue(connectionContext.shouldEnableArrow());
   }
 
   @Test
@@ -1104,11 +1105,12 @@ class DatabricksConnectionContextTest {
     "false, 1, 1, 1, true, THRIFT", // Explicit useThriftClient=1 returns THRIFT
     "false, 0, 1, 1, true, SEA", // Explicit useThriftClient=0 returns SEA
     "false, 0, 1, 1, false, SEA", // Explicit useThriftClient=0 returns SEA (ignores flag)
-    "false, null, 0, 1, true, THRIFT", // Arrow disabled returns THRIFT
+    "false, null, 0, 1, true, SEA", // Arrow param ignored (deprecated) + CloudFetch enabled +
+    // flag=true → SEA
     "false, null, 1, 0, true, THRIFT", // CloudFetch disabled returns THRIFT
     "false, null, 1, 1, true, SEA", // All enabled + flag=true returns SEA
     "false, null, 1, 1, false, THRIFT", // All enabled + flag=false returns THRIFT
-    "false, null, 0, 0, true, THRIFT", // Both Arrow and CloudFetch disabled returns THRIFT
+    "false, null, 0, 0, true, THRIFT", // CloudFetch disabled returns THRIFT (Arrow param ignored)
   })
   public void testClientTypeDecisionMatrix(
       boolean isCluster,
