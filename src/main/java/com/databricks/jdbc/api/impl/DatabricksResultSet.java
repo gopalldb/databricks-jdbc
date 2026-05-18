@@ -87,6 +87,8 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
   // StreamingInlineArrowResult, StreamingColumnarResult) is retained as defense-in-depth.
   private final long maxRowsLimit;
   private long rowsReturned = 0;
+  private boolean truncatedByMaxRows =
+      false; // F3: tracks client-side truncation for cursor methods
   // Flag to bypass maxRows check during getUpdateCount() internal iteration,
   // which calls next() to sum affected-row counts for DML statements.
   private boolean countingUpdateRows = false;
@@ -307,14 +309,21 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     // Client-side maxRows truncation: stop before delegating to the underlying result
     // implementation when the limit has been reached. This is skipped during
     // getUpdateCount() internal iteration (countingUpdateRows) to avoid breaking DML
-    // row counting. Individual result-set implementations (e.g. StreamingInlineArrowResult,
-    // StreamingColumnarResult) also enforce maxRows independently as defense-in-depth,
-    // so truncation still works even if this central check is somehow bypassed.
+    // row counting. Some streaming implementations (StreamingInlineArrowResult,
+    // StreamingColumnarResult, LazyThriftResult) also enforce maxRows internally;
+    // InlineJsonResult and ArrowStreamResult do not — this central check covers them.
     if (maxRowsLimit > 0 && rowsReturned >= maxRowsLimit && !countingUpdateRows) {
       LOGGER.debug(
-          "maxRows limit ({}) reached; returning false from next() after {} rows",
+          "maxRows limit ({}) reached for statement {}; returning false after {} rows",
           maxRowsLimit,
+          statementId,
           rowsReturned);
+      truncatedByMaxRows = true;
+      // F1: record telemetry for truncated queries so dashboards reflect the truncation
+      if (cachedTelemetryCollector != null) {
+        cachedTelemetryCollector.recordResultSetIteration(
+            statementId.toSQLExecStatementId(), resultSetMetaData.getChunkCount(), false);
+      }
       return false;
     }
     boolean hasNext = this.executionResult.next();
@@ -360,10 +369,13 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
   private static long resolveMaxRowsLimit(IDatabricksStatementInternal parentStatement) {
     try {
       if (parentStatement != null) {
-        return parentStatement.getMaxRows();
+        // F2: Use getLargeMaxRows() to preserve full long precision.
+        // getMaxRows() returns int and silently truncates values > Integer.MAX_VALUE.
+        return parentStatement.getLargeMaxRows();
       }
-    } catch (Exception e) {
-      LOGGER.trace("Error resolving maxRows limit: {}", e.getMessage());
+    } catch (SQLException e) {
+      // F4: Narrow to SQLException (the only checked exception from getLargeMaxRows).
+      LOGGER.warn("Error resolving maxRows limit: {}", e.getMessage());
     }
     return 0;
   }
@@ -709,7 +721,9 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
   @Override
   public boolean isAfterLast() throws SQLException {
     checkIfClosed();
-    return executionResult.getCurrentRow() >= resultSetMetaData.getTotalRows();
+    // F3: account for client-side maxRows truncation
+    return truncatedByMaxRows
+        || executionResult.getCurrentRow() >= resultSetMetaData.getTotalRows();
   }
 
   @Override

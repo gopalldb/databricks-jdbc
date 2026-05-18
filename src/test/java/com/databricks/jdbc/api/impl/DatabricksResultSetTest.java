@@ -1415,7 +1415,7 @@ public class DatabricksResultSetTest {
   private DatabricksResultSet getResultSetWithMaxRows(int maxRows, IExecutionResult executionResult)
       throws Exception {
     IDatabricksStatementInternal stmt = mock(IDatabricksStatementInternal.class);
-    when(stmt.getMaxRows()).thenReturn(maxRows);
+    when(stmt.getLargeMaxRows()).thenReturn((long) maxRows);
     return new DatabricksResultSet(
         new StatementStatus().setState(StatementState.SUCCEEDED),
         STATEMENT_ID,
@@ -1549,7 +1549,7 @@ public class DatabricksResultSetTest {
     when(mockMeta.getColumnNameIndex(AFFECTED_ROWS_COUNT)).thenReturn(1);
 
     IDatabricksStatementInternal stmt = mock(IDatabricksStatementInternal.class);
-    when(stmt.getMaxRows()).thenReturn(2);
+    when(stmt.getLargeMaxRows()).thenReturn(2L);
 
     DatabricksResultSet resultSet =
         new DatabricksResultSet(

@@ -15,6 +15,8 @@ public interface IDatabricksStatementInternal {
 
   int getMaxRows() throws DatabricksSQLException;
 
+  long getLargeMaxRows() throws DatabricksSQLException;
+
   void setStatementId(StatementId statementId);
 
   StatementId getStatementId();
