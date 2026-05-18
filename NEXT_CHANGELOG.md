@@ -1,8 +1,8 @@
 # NEXT CHANGELOG
 
-## 3.4.1
+## [Unreleased]
 
-### BREAKING CHANGES — Metadata JDBC Spec Compliance
+### BREAKING CHANGES in 3.4.1 — Metadata JDBC Spec Compliance
 
 This release unifies metadata behavior across Thrift and SQL Exec API backends
 using SQL SHOW commands for all metadata operations on SQL warehouses. Several
