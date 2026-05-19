@@ -11,16 +11,11 @@ upgrading. These changes do not affect metadata on All-Purpose Clusters.
 
 * **`getTables`/`getColumns`/`getSchemas`: Catalog parameter is now treated as
   an exact-match identifier per JDBC spec.** Passing `%` or wildcard patterns as
-  catalog previously returned results across all catalogs; now returns zero rows.
+  catalog previously returned results across all catalogs.
   Use `null` to search all catalogs.
 
 * **`getTables` with empty types array: Now returns zero rows per JDBC spec.**
-  Previously ignored the empty array and returned all table types. Use `null` to
-  return all types.
-
-* **`getColumnTypeName()` for DECIMAL: Now returns `"DECIMAL"` without
-  precision/scale suffix.** Use `getPrecision()` and `getScale()` to retrieve
-  numeric constraints.
+  Use `null` to return all types.
 
 * **`getSchemas`: Now includes `information_schema` in results.** Excludes
   `global_temp` schema (previously returned by Thrift for all catalogs).
@@ -38,9 +33,8 @@ upgrading. These changes do not affect metadata on All-Purpose Clusters.
   instead of EWKT strings. Set `EnableGeoSpatialSupport=0` to restore the
   previous behavior.
 
-### Enhancements & New Features
-
-* Metadata operations now use SQL SHOW commands for both Thrift and SEA backends,
+### Added
+- Metadata operations now use SQL SHOW commands for both Thrift and SEA backends,
   ensuring consistent behavior for SQL warehouses regardless of underlying
   protocol. To revert to native Thrift metadata RPCs, set `UseQueryForMetadata=0`.
 
