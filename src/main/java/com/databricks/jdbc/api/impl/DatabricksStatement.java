@@ -152,6 +152,13 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
         LOGGER.warn(warningMsg);
         warnings = WarningUtil.addWarning(warnings, warningMsg);
       } else {
+        // Close ResultSet first — this triggers proactive server close via
+        // closeServerOperation() and sets serverOperationClosed=true, preventing
+        // a duplicate closeStatement RPC below.
+        if (resultSet != null) {
+          this.resultSet.close();
+          this.resultSet = null;
+        }
         // Skip server-side close if operation was already closed:
         // - directResultsReceived: server closed it (inline results)
         // - serverOperationClosed: client proactively closed it (results consumed or RS closed)
@@ -164,10 +171,6 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
               statementId,
               directResultsReceived,
               serverOperationClosed);
-        }
-        if (resultSet != null) {
-          this.resultSet.close();
-          this.resultSet = null;
         }
       }
     } finally {
@@ -967,7 +970,8 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
    * <p>After this call, {@link #close(boolean)} will skip the closeStatement RPC since the server
    * operation is already closed. The Statement can still be re-executed.
    */
-  void closeServerOperation() {
+  @Override
+  public void closeServerOperation() {
     if (serverOperationClosed || directResultsReceived || statementId == null || isClosed) {
       return;
     }
@@ -979,13 +983,14 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
       this.serverOperationClosed = true;
       LOGGER.debug(
           "Proactively closed server operation for statement {} (results consumed)", statementId);
-    } catch (Exception e) {
-      // Best-effort — don't fail the user's iteration/close for a server cleanup failure.
+    } catch (SQLException | RuntimeException e) {
+      // Best-effort — don't fail the user's close for a server cleanup failure.
       // serverOperationClosed stays false so Statement.close() will retry the RPC.
-      LOGGER.debug(
+      LOGGER.warn(
           "Failed to proactively close server operation for statement {}: {}",
           statementId,
-          e.getMessage());
+          e.getMessage(),
+          e);
     }
   }
 
@@ -1013,9 +1018,10 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     //
     // Skip if: (1) no previous execution (statementId==null), or
     //          (2) server already closed the operation (direct results).
-    if (statementId != null && !directResultsReceived) {
+    if (statementId != null && !directResultsReceived && !serverOperationClosed) {
       try {
         connection.getSession().getDatabricksClient().closeStatement(statementId);
+        serverOperationClosed = true;
       } catch (Exception e) {
         // Don't block re-execution if closing the previous operation fails.
         // This covers: network errors, operation already expired/evicted on server,
@@ -1028,10 +1034,8 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
       }
     }
 
-    // Per JDBC spec, re-executing a Statement implicitly closes the current ResultSet.
-    // Close BEFORE resetting flags — resultSet.close() → closeServerOperation() needs
-    // to see the current directResultsReceived/serverOperationClosed state to decide
-    // whether to send closeStatement RPC.
+    // Close the previous ResultSet. closeServerOperation() inside resultSet.close()
+    // will be a no-op since serverOperationClosed is already true from above.
     if (resultSet != null) {
       try {
         resultSet.close();
