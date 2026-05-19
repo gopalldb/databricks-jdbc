@@ -39,6 +39,7 @@ upgrading. These changes do not affect metadata on All-Purpose Clusters.
   protocol. To revert to native Thrift metadata RPCs, set `UseQueryForMetadata=0`.
 
 ### Updated
+- `getColumnTypeName()` for DECIMAL columns now preserves precision/scale suffix (e.g., `"DECIMAL(10,2)"`) consistently across both Thrift and SEA backends.
 - `EnableGeoSpatialSupport` no longer requires `EnableComplexDatatypeSupport=1`. Geospatial types (GEOMETRY, GEOGRAPHY) can now be enabled independently of complex type support (ARRAY, MAP, STRUCT).
 - Arrow schema deserialization failures (Thrift metadata path) now surface a dedicated driver error code `ARROW_SCHEMA_PARSING_ERROR` (vendor code `22000`) and a proper SQLSTATE `22000` (Data Exception) on the thrown `SQLException`, instead of the generic `RESULT_SET_ERROR` (1004) and the enum name as SQLSTATE. The exception message is unchanged.
 - When a Statement is re-executed, the previous server-side operation is now explicitly closed before starting the new execution, preventing orphaned server-side operations when Statements are reused.
