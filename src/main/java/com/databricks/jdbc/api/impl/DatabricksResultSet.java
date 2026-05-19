@@ -82,9 +82,12 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
   // for the lifetime of a result set.
   private final TelemetryCollector cachedTelemetryCollector;
 
-  // Client-side maxRows enforcement. This provides a single, implementation-agnostic
-  // truncation point in next(). Per-implementation maxRows enforcement (e.g. in
-  // StreamingInlineArrowResult, StreamingColumnarResult) is retained as defense-in-depth.
+  // Client-side maxRows enforcement. This central check in next() is the primary
+  // enforcement point using the full long precision from getLargeMaxRows(). Some
+  // streaming implementations (StreamingInlineArrowResult, StreamingColumnarResult,
+  // LazyThriftResult) also enforce maxRows internally using int precision — those
+  // per-impl checks are secondary and only correct for values within int range.
+  // For values > Integer.MAX_VALUE, only this central check is reliable.
   private final long maxRowsLimit;
   private long rowsReturned = 0;
   private boolean truncatedByMaxRows =
@@ -752,6 +755,11 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
   @Override
   public boolean isLast() throws SQLException {
     checkIfClosed();
+    // Account for client-side maxRows truncation: if the next next() call would
+    // hit the limit, this is the last row the caller will see.
+    if (maxRowsLimit > 0 && rowsReturned >= maxRowsLimit) {
+      return true;
+    }
     if (executionResult instanceof LazyThriftResult
         || executionResult instanceof StreamingColumnarResult
         || executionResult instanceof LazyThriftInlineArrowResult
