@@ -14,9 +14,10 @@ import org.junit.jupiter.api.Test;
 public class SqlExecApiIntegrationTests extends AbstractFakeServiceIntegrationTests {
 
   @Test
-  void testJsonInlineChunkedResults_withoutArrow() throws SQLException {
+  void testChunkedResults_enableArrowDeprecatedIgnored() throws SQLException {
+    // EnableArrow=0 is deprecated and ignored on non-AIX — Arrow is always enabled.
+    // This test verifies the query still succeeds with the deprecated flag set.
     final String table = "samples.tpch.lineitem";
-    // Limit set such that atleast 2 chunks are present for results
     final int maxRows = 64000;
     final String sql = "SELECT * FROM " + table + " limit " + maxRows;
 

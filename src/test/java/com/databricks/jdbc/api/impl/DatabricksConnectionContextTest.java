@@ -359,6 +359,21 @@ class DatabricksConnectionContextTest {
   }
 
   @Test
+  public void testShouldEnableArrow_defaultIsTrue() throws DatabricksSQLException {
+    // On non-AIX, Arrow is always enabled regardless of EnableArrow setting
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(TestConstants.VALID_URL_1, properties);
+    assertTrue(ctx.shouldEnableArrow(), "Arrow should be enabled by default");
+  }
+
+  @Test
+  public void testShouldEnableArrow_explicitDisableIgnoredOnNonAix() throws DatabricksSQLException {
+    IDatabricksConnectionContext ctx =
+        DatabricksConnectionContext.parse(TestConstants.VALID_URL_1 + ";EnableArrow=0", properties);
+    assertTrue(ctx.shouldEnableArrow(), "EnableArrow=0 should be ignored on non-AIX");
+  }
+
+  @Test
   public void testAllPurposeClusterParsing() throws DatabricksSQLException {
     DatabricksConnectionContext connectionContext =
         (DatabricksConnectionContext)
@@ -947,7 +962,9 @@ class DatabricksConnectionContextTest {
   }
 
   @Test
-  public void testClientTypeWhenArrowDisabled() throws DatabricksSQLException {
+  public void testClientTypeWhenArrowDisabled_nonAix_ignoredDefaultsToThrift()
+      throws DatabricksSQLException {
+    // EnableArrow=0 is ignored on non-AIX — but without SEA feature flag, defaults to THRIFT
     String urlWithArrowDisabled =
         "jdbc:databricks://sample-host.cloud.databricks.com:9999/default;AuthMech=3;"
             + "httpPath=/sql/1.0/warehouses/9999999999999999;EnableArrow=0";
@@ -969,7 +986,9 @@ class DatabricksConnectionContextTest {
   }
 
   @Test
-  public void testClientTypeWhenBothArrowAndCloudFetchDisabled() throws DatabricksSQLException {
+  public void testClientTypeWhenBothArrowAndCloudFetchDisabled_nonAix()
+      throws DatabricksSQLException {
+    // EnableArrow=0 ignored on non-AIX; CloudFetch disabled → THRIFT
     String urlWithBothDisabled =
         "jdbc:databricks://sample-host.cloud.databricks.com:9999/default;AuthMech=3;"
             + "httpPath=/sql/1.0/warehouses/9999999999999999;EnableArrow=0;EnableQueryResultDownload=0";

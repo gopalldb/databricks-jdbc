@@ -505,6 +505,10 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
           remainingMs);
       return DatabricksClientType.THRIFT;
     }
+    // On AIX/PowerPC, Arrow may be disabled — check before routing to SEA
+    if (isAixOrPowerPc() && !shouldEnableArrow()) {
+      return DatabricksClientType.THRIFT;
+    }
     // Check if CloudFetch is disabled - Thrift is required for inline mode
     if (!isCloudFetchEnabled()) {
       return DatabricksClientType.THRIFT;
@@ -668,17 +672,20 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
     // Arrow is always enabled unless running on AIX or IBM Power (which have known
     // issues with the Arrow native library). The EnableArrow connection property is
     // deprecated and its value is ignored on non-AIX/IBM platforms.
-    String osName = System.getProperty("os.name", "").toLowerCase();
-    String osArch = System.getProperty("os.arch", "").toLowerCase();
-    if (osName.contains("aix") || osArch.contains("ppc")) {
-      // On AIX/IBM Power, honour the user's explicit setting (default is "1" = enabled)
-      return Objects.equals(getParameter(DatabricksJdbcUrlParams.ENABLE_ARROW), "1");
+    if (isAixOrPowerPc()) {
+      // On AIX/PowerPC, Arrow native library has known issues — default to disabled.
+      // Honour explicit EnableArrow=1 if user sets it.
+      String explicitValue = getParameterIgnoreDefault(DatabricksJdbcUrlParams.ENABLE_ARROW);
+      if (explicitValue != null) {
+        return explicitValue.equals("1");
+      }
+      return false; // default disabled on AIX/PowerPC
     }
 
-    // Log deprecation warning if user explicitly set EnableArrow=0 (ignored)
+    // Log deprecation warning once if user explicitly set EnableArrow=0 (ignored)
     String explicitValue = getParameterIgnoreDefault(DatabricksJdbcUrlParams.ENABLE_ARROW);
     if (explicitValue != null && explicitValue.equals("0")) {
-      LOGGER.warn(
+      LOGGER.info(
           "EnableArrow=0 is deprecated and ignored. Arrow serialization is always enabled. "
               + "To use JSON inline results with SEA, disable CloudFetch via "
               + "EnableQueryResultDownload=0.");
@@ -1211,6 +1218,13 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
 
   private String getParameterIgnoreDefault(DatabricksJdbcUrlParams key) {
     return this.parameters.getOrDefault(key.getParamName().toLowerCase(), null);
+  }
+
+  /** Returns true if running on AIX or IBM PowerPC architecture. */
+  private static boolean isAixOrPowerPc() {
+    String osName = System.getProperty("os.name", "").toLowerCase();
+    String osArch = System.getProperty("os.arch", "").toLowerCase();
+    return osName.contains("aix") || osArch.contains("ppc");
   }
 
   /**
