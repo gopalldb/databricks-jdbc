@@ -85,7 +85,8 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
   // Client-side maxRows enforcement. This central check in next() is the primary
   // enforcement point using the full long precision from getLargeMaxRows(). Some
   // streaming implementations (StreamingInlineArrowResult, StreamingColumnarResult,
-  // LazyThriftResult) also enforce maxRows internally using int precision — those
+  // LazyThriftResult, LazyThriftInlineArrowResult) also enforce maxRows internally using int
+  // precision — those
   // per-impl checks are secondary and only correct for values within int range.
   // For values > Integer.MAX_VALUE, only this central check is reliable.
   private final long maxRowsLimit;
@@ -312,8 +313,9 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     // implementation when the limit has been reached. This is skipped during
     // getUpdateCount() internal iteration (countingUpdateRows) to avoid breaking DML
     // row counting. Some streaming implementations (StreamingInlineArrowResult,
-    // StreamingColumnarResult, LazyThriftResult) also enforce maxRows internally;
-    // InlineJsonResult and ArrowStreamResult do not — this central check covers them.
+    // StreamingColumnarResult, LazyThriftResult, LazyThriftInlineArrowResult) also
+    // enforce maxRows internally; InlineJsonResult and ArrowStreamResult do not —
+    // this central check covers all paths.
     if (maxRowsLimit > 0 && rowsReturned >= maxRowsLimit && !countingUpdateRows) {
       LOGGER.debug(
           "maxRows limit ({}) reached for statement {}; returning false after {} rows",
@@ -801,6 +803,10 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
   @Override
   public int getRow() throws SQLException {
     checkIfClosed();
+    // JDBC spec: getRow() returns 0 when cursor is not on a valid row (after last)
+    if (truncatedByMaxRows) {
+      return 0;
+    }
     return (int) executionResult.getCurrentRow() + 1;
   }
 

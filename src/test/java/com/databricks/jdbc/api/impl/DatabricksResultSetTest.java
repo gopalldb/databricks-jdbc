@@ -1536,6 +1536,27 @@ public class DatabricksResultSetTest {
   }
 
   @Test
+  void testCursorMethodsAfterMaxRowsTruncation() throws Exception {
+    when(mockedExecutionResult.next()).thenReturn(true);
+    DatabricksResultSet resultSet = getResultSetWithMaxRows(3, mockedExecutionResult);
+
+    // Consume all 3 allowed rows
+    assertTrue(resultSet.next());
+    assertTrue(resultSet.next());
+    assertTrue(resultSet.next());
+
+    // On the last allowed row, isLast() should be true
+    assertTrue(resultSet.isLast(), "isLast() should be true on the last allowed row");
+
+    // next() returns false — truncated
+    assertFalse(resultSet.next());
+
+    // After truncation: cursor is logically after last row
+    assertTrue(resultSet.isAfterLast(), "isAfterLast() should be true after truncation");
+    assertEquals(0, resultSet.getRow(), "getRow() should return 0 when cursor is after last row");
+  }
+
+  @Test
   void testGetUpdateCountBypassesMaxRows() throws Exception {
     // Mock an UPDATE result set with maxRows=2 but 5 affected rows across 5 result rows.
     // getUpdateCount() should sum all 5 rows (returning 5), proving the
