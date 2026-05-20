@@ -54,7 +54,7 @@ public class TelemetryHttpClientLeakTest {
       IDatabricksConnectionContext ctx = createTelemetryContext(uuid, host);
 
       // Register and create telemetry client
-      TelemetryClientFactory.getInstance().registerConnection(uuid);
+
       ITelemetryClient client = TelemetryClientFactory.getInstance().getTelemetryClient(ctx);
       assertInstanceOf(TelemetryClient.class, client);
 
@@ -101,7 +101,7 @@ public class TelemetryHttpClientLeakTest {
       IDatabricksConnectionContext ctx = createTelemetryContext(uuid, host);
 
       // Register and create telemetry client
-      TelemetryClientFactory.getInstance().registerConnection(uuid);
+
       TelemetryClientFactory.getInstance().getTelemetryClient(ctx);
 
       // Record pending events
@@ -150,7 +150,6 @@ public class TelemetryHttpClientLeakTest {
       when(ctx.getHttpMaxConnectionsPerRoute()).thenReturn(100);
 
       // Register the telemetry connection (HTTP factory uses tombstones, no registration needed)
-      TelemetryClientFactory.getInstance().registerConnection(uuid);
 
       // Create initial clients
       DatabricksHttpClientFactory.getInstance().getClient(ctx, HttpClientType.TELEMETRY);

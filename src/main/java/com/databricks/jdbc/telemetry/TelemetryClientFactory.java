@@ -35,14 +35,12 @@ public class TelemetryClientFactory {
   final Map<String, TelemetryClientHolder> noauthTelemetryClientHolders = new ConcurrentHashMap<>();
 
   /**
-   * Tracks connection UUIDs that are currently open. When a connection closes, its UUID is removed.
-   * {@link #getTelemetryClient} checks this set and returns {@link NoopTelemetryClient} for closed
-   * connections, preventing re-creation of orphaned TelemetryClients (issue #1325). The allowlist
-   * naturally shrinks as connections close, avoiding unbounded heap growth.
+   * Tracks connection UUIDs that have been closed. {@link #getTelemetryClient} checks this set and
+   * returns {@link NoopTelemetryClient} for closed connections, preventing re-creation of orphaned
+   * TelemetryClients (issue #1325). Growth is bounded by total connections closed over JVM lifetime
+   * (~80 bytes per UUID) — negligible for typical connection pool sizes.
    */
-  @VisibleForTesting final Set<String> openConnectionUuids = ConcurrentHashMap.newKeySet();
-
-  @VisibleForTesting final Set<String> everRegisteredUuids = ConcurrentHashMap.newKeySet();
+  @VisibleForTesting final Set<String> closedConnectionUuids = ConcurrentHashMap.newKeySet();
 
   private final ExecutorService telemetryExecutorService;
   private ScheduledExecutorService sharedSchedulerService;
@@ -84,22 +82,10 @@ public class TelemetryClientFactory {
     return INSTANCE;
   }
 
-  /**
-   * Registers a connection UUID as open. Must be called early in the connection lifecycle so that
-   * {@link #getTelemetryClient} permits client creation for this connection.
-   */
-  public void registerConnection(String connectionUuid) {
-    if (connectionUuid != null) {
-      openConnectionUuids.add(connectionUuid);
-      everRegisteredUuids.add(connectionUuid);
-    }
-  }
-
   public ITelemetryClient getTelemetryClient(IDatabricksConnectionContext connectionContext) {
-    // Reject connections that were registered and then closed (issue #1325).
-    // Unregistered UUIDs pass through (callers before registerConnection).
+    // Reject closed connections to prevent re-creation of orphaned TelemetryClients (issue #1325).
     String uuid = connectionContext.getConnectionUuid();
-    if (uuid != null && everRegisteredUuids.contains(uuid) && !openConnectionUuids.contains(uuid)) {
+    if (uuid != null && closedConnectionUuids.contains(uuid)) {
       return NoopTelemetryClient.getInstance();
     }
     if (!isTelemetryAllowedForConnection(connectionContext)) {
@@ -177,7 +163,7 @@ public class TelemetryClientFactory {
     // Mark connection closed FIRST to prevent getTelemetryClient() from re-creating a
     // TelemetryClient during or after this close sequence (issue #1325).
     if (connectionUuid != null) {
-      openConnectionUuids.remove(connectionUuid);
+      closedConnectionUuids.add(connectionUuid);
     }
 
     // Export pending events inside try-finally so holder cleanup always runs,
@@ -254,8 +240,7 @@ public class TelemetryClientFactory {
     // Clear the maps
     telemetryClientHolders.clear();
     noauthTelemetryClientHolders.clear();
-    openConnectionUuids.clear();
-    everRegisteredUuids.clear();
+    closedConnectionUuids.clear();
 
     // Clear cached connection parameters
     TelemetryHelper.clearConnectionParameterCache();
