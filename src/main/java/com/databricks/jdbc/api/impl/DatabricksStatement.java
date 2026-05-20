@@ -1008,8 +1008,6 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     // If the user closed the ResultSet before re-executing (best practice), the
     // proactive close already set serverOperationClosed=true and this is a no-op.
     if (statementId != null && !directResultsReceived && !serverOperationClosed) {
-      // Mark as closed immediately so resultSet.close() below doesn't fire a duplicate.
-      serverOperationClosed = true;
       final StatementId prevStatementId = statementId;
       final IDatabricksClient prevClient = connection.getSession().getDatabricksClient();
       Thread closeThread =
@@ -1030,10 +1028,11 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
       closeThread.setDaemon(true);
       closeThread.setName("close-stmt-" + prevStatementId);
       closeThread.start();
+      serverOperationClosed = true;
     }
 
     // Close the previous ResultSet. closeServerOperation() inside resultSet.close()
-    // is a no-op since serverOperationClosed is already true.
+    // is a no-op since serverOperationClosed was set above.
     if (resultSet != null) {
       try {
         resultSet.close();
