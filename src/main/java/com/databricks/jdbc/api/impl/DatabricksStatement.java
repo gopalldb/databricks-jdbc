@@ -1003,34 +1003,28 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     noMoreResults = false;
     updateCount = -1;
 
-    // Close the previous server-side operation if it exists. This prevents resource
-    // leaks when a Statement is re-executed (e.g., PreparedStatement in a loop).
-    // This matches the behavior of pgJDBC, MySQL Connector/J, Trino JDBC, and
-    // Databricks Python SQL Connector — all close the previous operation on re-execute.
+    // Close the previous server-side operation if still open. This prevents resource
+    // leaks when a Statement is re-executed without closing the previous ResultSet.
+    // If the user closed the ResultSet before re-executing (best practice), the
+    // proactive close already set serverOperationClosed=true and this is a no-op.
     //
-    // Note on directResultsReceived: we check the flag value from the PREVIOUS execution
-    // here. The flag is reset to false below, after this close attempt.
-    //
-    // Note on latency: this close is synchronous (adds one RPC round-trip before the next
-    // execution). This is consistent with pgJDBC's closeForNextExecution() which is also
-    // synchronous. The correctness benefit (no orphaned server operations) outweighs the
-    // latency cost for typical usage patterns.
-    //
-    // Skip if: (1) no previous execution (statementId==null), or
-    //          (2) server already closed the operation (direct results).
+    // Skip if: (1) no previous execution (statementId==null),
+    //          (2) server already closed the operation (direct/inline results), or
+    //          (3) client already proactively closed it (via ResultSet.close()).
     if (statementId != null && !directResultsReceived && !serverOperationClosed) {
       try {
         connection.getSession().getDatabricksClient().closeStatement(statementId);
         serverOperationClosed = true;
-      } catch (Exception e) {
+      } catch (SQLException | RuntimeException e) {
         // Don't block re-execution if closing the previous operation fails.
         // This covers: network errors, operation already expired/evicted on server,
         // and transport-level errors (e.g., unexpected server responses).
         // The new execution will create a fresh operation with a new statementId.
-        LOGGER.debug(
+        LOGGER.warn(
             "Failed to close previous server operation {} during re-execution: {}",
             statementId,
-            e.getMessage());
+            e.getMessage(),
+            e);
       }
     }
 
