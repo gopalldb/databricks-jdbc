@@ -48,6 +48,4 @@ public interface IDatabricksStatementInternal {
   default void closeServerOperation() {
     // no-op by default
   }
-
-  long getLargeMaxRows() throws DatabricksSQLException;
 }
