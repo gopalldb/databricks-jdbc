@@ -35,12 +35,12 @@ public class TelemetryClientFactory {
   final Map<String, TelemetryClientHolder> noauthTelemetryClientHolders = new ConcurrentHashMap<>();
 
   /**
-   * Tracks connection UUIDs that have been closed. When a connection is closed, its UUID is added
-   * here so that subsequent getTelemetryClient() calls (e.g., from delayed flush tasks or collector
-   * exports) return NoopTelemetryClient instead of re-creating an orphaned TelemetryClient. This
-   * prevents the socket leak described in GitHub issue #1325.
+   * Tracks connection UUIDs that are currently open. When a connection closes, its UUID is removed.
+   * {@link #getTelemetryClient} checks this set and returns {@link NoopTelemetryClient} for closed
+   * connections, preventing re-creation of orphaned TelemetryClients (issue #1325). The allowlist
+   * naturally shrinks as connections close, avoiding unbounded heap growth.
    */
-  @VisibleForTesting final Set<String> closedConnectionUuids = ConcurrentHashMap.newKeySet();
+  @VisibleForTesting final Set<String> openConnectionUuids = ConcurrentHashMap.newKeySet();
 
   private final ExecutorService telemetryExecutorService;
   private ScheduledExecutorService sharedSchedulerService;
@@ -82,16 +82,24 @@ public class TelemetryClientFactory {
     return INSTANCE;
   }
 
+  /**
+   * Registers a connection UUID as open. Must be called early in the connection lifecycle so that
+   * {@link #getTelemetryClient} permits client creation for this connection.
+   */
+  public void registerConnection(String connectionUuid) {
+    if (connectionUuid != null) {
+      openConnectionUuids.add(connectionUuid);
+    }
+  }
+
   public ITelemetryClient getTelemetryClient(IDatabricksConnectionContext connectionContext) {
-    if (!isTelemetryAllowedForConnection(connectionContext)) {
+    // Check allowlist FIRST — avoid expensive isTelemetryAllowedForConnection() for closed
+    // connections.
+    String uuid = connectionContext.getConnectionUuid();
+    if (uuid != null && !openConnectionUuids.contains(uuid)) {
       return NoopTelemetryClient.getInstance();
     }
-    // Prevent re-creation of TelemetryClient for connections that have been closed.
-    // Without this guard, code paths that call getTelemetryClient() after
-    // closeTelemetryClient() (e.g., TelemetryCollector.exportAllPendingTelemetryDetails
-    // or delayed TelemetryPushTask flush) would create an orphaned TelemetryClient
-    // whose periodic flush creates leaked TELEMETRY HTTP clients (issue #1325).
-    if (closedConnectionUuids.contains(connectionContext.getConnectionUuid())) {
+    if (!isTelemetryAllowedForConnection(connectionContext)) {
       return NoopTelemetryClient.getInstance();
     }
     DatabricksConfig databricksConfig =
@@ -154,53 +162,53 @@ public class TelemetryClientFactory {
    * Closes telemetry client for a connection. Thread-safe: computeIfPresent ensures atomic locking,
    * preventing race conditions between connection removal and addition.
    *
-   * <p>The connection UUID is added to closedConnectionUuids FIRST to prevent getTelemetryClient()
-   * from re-creating a TelemetryClient during or after the close sequence. Pending
-   * TelemetryCollector events are exported BEFORE the TelemetryClient is closed, so they are
+   * <p>The connection UUID is removed from the open set FIRST to prevent getTelemetryClient() from
+   * re-creating a TelemetryClient during or after the close sequence. Pending TelemetryCollector
+   * events are exported BEFORE the TelemetryClient is closed (inside try-finally), so they are
    * flushed through the existing client. See GitHub issue #1325.
    */
   public void closeTelemetryClient(IDatabricksConnectionContext connectionContext) {
     String key = TelemetryHelper.keyOf(connectionContext);
     String connectionUuid = connectionContext.getConnectionUuid();
 
-    // Export pending TelemetryCollector events BEFORE closing the TelemetryClient.
-    // This ensures the export uses the existing TelemetryClient (via the holder map)
-    // rather than triggering re-creation after the holder is removed.
-    TelemetryCollector collector =
-        TelemetryCollectorManager.getInstance().removeCollector(connectionContext);
-    if (collector != null) {
-      collector.exportAllPendingTelemetryDetails();
+    // Mark connection closed FIRST to prevent getTelemetryClient() from re-creating a
+    // TelemetryClient during or after this close sequence (issue #1325).
+    if (connectionUuid != null) {
+      openConnectionUuids.remove(connectionUuid);
     }
 
-    // Mark the connection as closed to prevent getTelemetryClient() from re-creating a
-    // TelemetryClient if called by delayed flush tasks or collector exports (issue #1325).
-    // This is done inside computeIfPresent so it only applies to connections that actually
-    // had a telemetry client registered.
-    telemetryClientHolders.computeIfPresent(
-        key,
-        (k, holder) -> {
-          holder.connectionUuids.remove(connectionUuid);
-          closedConnectionUuids.add(connectionUuid);
-          if (holder.connectionUuids.isEmpty()) {
-            closeTelemetryClient(holder.client, "telemetry client");
-            return null;
-          }
-          return holder;
-        });
-    noauthTelemetryClientHolders.computeIfPresent(
-        key,
-        (k, holder) -> {
-          holder.connectionUuids.remove(connectionUuid);
-          closedConnectionUuids.add(connectionUuid);
-          if (holder.connectionUuids.isEmpty()) {
-            closeTelemetryClient(holder.client, "unauthenticated telemetry client");
-            return null;
-          }
-          return holder;
-        });
+    // Export pending events inside try-finally so holder cleanup always runs,
+    // even if export throws (F6).
+    try {
+      TelemetryCollector collector =
+          TelemetryCollectorManager.getInstance().removeCollector(connectionContext);
+      if (collector != null) {
+        collector.exportAllPendingTelemetryDetails();
+      }
+    } finally {
+      telemetryClientHolders.computeIfPresent(
+          key,
+          (k, holder) -> {
+            holder.connectionUuids.remove(connectionUuid);
+            if (holder.connectionUuids.isEmpty()) {
+              closeTelemetryClient(holder.client, "telemetry client");
+              return null;
+            }
+            return holder;
+          });
+      noauthTelemetryClientHolders.computeIfPresent(
+          key,
+          (k, holder) -> {
+            holder.connectionUuids.remove(connectionUuid);
+            if (holder.connectionUuids.isEmpty()) {
+              closeTelemetryClient(holder.client, "unauthenticated telemetry client");
+              return null;
+            }
+            return holder;
+          });
 
-    // Clean up cached connection parameters to prevent memory leaks
-    TelemetryHelper.removeConnectionParameters(connectionContext.getConnectionUuid());
+      TelemetryHelper.removeConnectionParameters(connectionUuid);
+    }
   }
 
   public ExecutorService getTelemetryExecutorService() {
@@ -243,7 +251,7 @@ public class TelemetryClientFactory {
     // Clear the maps
     telemetryClientHolders.clear();
     noauthTelemetryClientHolders.clear();
-    closedConnectionUuids.clear();
+    openConnectionUuids.clear();
 
     // Clear cached connection parameters
     TelemetryHelper.clearConnectionParameterCache();

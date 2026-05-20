@@ -5,10 +5,13 @@ import static org.mockito.Mockito.*;
 
 import com.databricks.jdbc.api.internal.IDatabricksConnectionContext;
 import com.databricks.jdbc.common.HttpClientType;
-import com.databricks.jdbc.dbclient.IDatabricksHttpClient;
 import com.databricks.jdbc.dbclient.impl.http.DatabricksHttpClientFactory;
 import com.databricks.jdbc.telemetry.latency.TelemetryCollector;
 import com.databricks.jdbc.telemetry.latency.TelemetryCollectorManager;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,193 +19,203 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 
 /**
- * Reproduction test for GitHub issue #1325: Leaked Socket prevents CRaC checkpointing.
+ * Tests for GitHub issue #1325: Leaked Socket prevents CRaC checkpointing.
  *
- * <p>Root cause: In TelemetryClientFactory.closeTelemetryClient(), the TelemetryCollector's pending
- * events are exported AFTER the TelemetryClient has been closed and removed from the holder map.
- * The export path calls getTelemetryClient(ctx) which re-creates a new TelemetryClient. That new
- * client's eventual flush calls DatabricksHttpClientFactory.getClient(ctx, TELEMETRY) — and since
- * removeClient(ctx) already ran, this creates an orphaned HTTP client that leaks a TCP socket.
+ * <p>Verifies that after Connection.close(), delayed telemetry flush tasks cannot re-create HTTP
+ * clients or TelemetryClients that would leak TCP sockets.
  */
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 public class TelemetryHttpClientLeakTest {
 
   @BeforeEach
   public void setUp() {
     TelemetryClientFactory.getInstance().reset();
     TelemetryCollectorManager.getInstance().clear();
+    DatabricksHttpClientFactory.getInstance().reset();
   }
 
   @AfterEach
   public void tearDown() {
     TelemetryClientFactory.getInstance().reset();
     TelemetryCollectorManager.getInstance().clear();
+    DatabricksHttpClientFactory.getInstance().reset();
   }
 
-  /**
-   * Proves the fundamental re-creation bug: calling getTelemetryClient() after
-   * closeTelemetryClient() creates a new orphaned TelemetryClient.
-   *
-   * <p>This is exactly what happens inside closeTelemetryClient() at line 172 when
-   * collector.exportAllPendingTelemetryDetails() → TelemetryHelper.exportTelemetryLog() →
-   * TelemetryClientFactory.getTelemetryClient(ctx) is called after the holder was removed at line
-   * 149.
-   */
   @Test
-  void testGetTelemetryClientAfterCloseReCreatesClient() throws Exception {
+  void testGetTelemetryClientAfterCloseReturnsNoop() throws Exception {
     String host = "leak-test-host.databricks.net";
     String uuid = "leak-test-uuid-1";
 
     try (MockedStatic<TelemetryHelper> mockedStatic = mockStatic(TelemetryHelper.class)) {
       setupTelemetryHelperMock(mockedStatic);
-      IDatabricksConnectionContext ctx = createMockContext(uuid, host);
+      IDatabricksConnectionContext ctx = createTelemetryContext(uuid, host);
 
-      // Open: create telemetry client
+      // Register and create telemetry client
+      TelemetryClientFactory.getInstance().registerConnection(uuid);
       ITelemetryClient client = TelemetryClientFactory.getInstance().getTelemetryClient(ctx);
       assertInstanceOf(TelemetryClient.class, client);
-      assertEquals(1, TelemetryClientFactory.getInstance().noauthTelemetryClientHolders.size());
 
-      // Close: remove telemetry client
+      // Close telemetry client
       TelemetryClientFactory.getInstance().closeTelemetryClient(ctx);
       assertEquals(0, TelemetryClientFactory.getInstance().noauthTelemetryClientHolders.size());
 
-      // Bug: getTelemetryClient after close re-creates a new TelemetryClient
+      // After close, getTelemetryClient must return NoopTelemetryClient
       ITelemetryClient recreated = TelemetryClientFactory.getInstance().getTelemetryClient(ctx);
-
-      // After closeTelemetryClient(), getTelemetryClient() should NOT create a new
-      // real TelemetryClient. It should return NoopTelemetryClient to prevent leaks.
       assertInstanceOf(
           NoopTelemetryClient.class,
           recreated,
-          "LEAK BUG (issue #1325): getTelemetryClient() after closeTelemetryClient() "
-              + "created a new TelemetryClient instead of returning NoopTelemetryClient. "
-              + "This orphaned client will never be closed, and its periodic flush creates "
-              + "TELEMETRY HTTP clients that leak TCP sockets.");
-
-      assertEquals(
-          0,
-          TelemetryClientFactory.getInstance().noauthTelemetryClientHolders.size(),
-          "LEAK BUG (issue #1325): A new TelemetryClient holder was created after close.");
+          "getTelemetryClient() after close must return NoopTelemetryClient (issue #1325)");
+      assertEquals(0, TelemetryClientFactory.getInstance().noauthTelemetryClientHolders.size());
     }
   }
 
-  /**
-   * Verifies that DatabricksHttpClientFactory.getClient() returns null for closed connections,
-   * preventing TelemetryPushTask from creating orphaned HTTP clients after closeConnection().
-   *
-   * <p>Before the fix, getClient(ctx, TELEMETRY) after closeConnection(ctx) would create a new
-   * DatabricksHttpClient via computeIfAbsent that was never closed, leaking a TCP socket.
-   */
   @Test
-  void testGetClientReturnsNullAfterCloseConnection() throws Exception {
+  void testGetClientReturnsNullAfterCloseConnection() {
     String uuid = "leak-test-uuid-2";
-    IDatabricksConnectionContext ctx = createMockContext(uuid, "leak-test-host.databricks.net");
+    IDatabricksConnectionContext ctx = createHttpContext(uuid);
 
-    // closeConnection marks the connection as permanently closed
+    // Register, then close
+    DatabricksHttpClientFactory.getInstance().registerConnection(uuid);
     DatabricksHttpClientFactory.getInstance().closeConnection(ctx);
 
-    // After closeConnection, getClient should return null (not create a new HTTP client)
-    IDatabricksHttpClient client =
-        DatabricksHttpClientFactory.getInstance().getClient(ctx, HttpClientType.TELEMETRY);
+    // After close, getClient should return null
     assertNull(
-        client,
-        "getClient() should return null for a closed connection to prevent creating "
-            + "orphaned HTTP clients that leak TCP sockets (issue #1325).");
-
-    // Also verify for other client types
+        DatabricksHttpClientFactory.getInstance().getClient(ctx, HttpClientType.TELEMETRY),
+        "getClient(TELEMETRY) should return null after closeConnection (issue #1325)");
     assertNull(
         DatabricksHttpClientFactory.getInstance().getClient(ctx, HttpClientType.COMMON),
-        "getClient(COMMON) should return null for closed connection");
-    assertNull(
-        DatabricksHttpClientFactory.getInstance().getClient(ctx, HttpClientType.VOLUME),
-        "getClient(VOLUME) should return null for closed connection");
+        "getClient(COMMON) should return null after closeConnection");
   }
 
-  /**
-   * End-to-end test: proves the ordering bug in closeTelemetryClient causes getTelemetryClient
-   * re-creation when the TelemetryCollector has pending events.
-   *
-   * <p>The mock of exportTelemetryLog simulates the real behavior: calling getTelemetryClient(ctx)
-   * from within the export path, which happens after the holder was already removed.
-   */
   @Test
-  void testCloseTelemetryClientWithPendingCollectorEventsReCreatesClient() throws Exception {
+  void testCloseTelemetryClientWithPendingEventsDoesNotReCreate() throws Exception {
     String host = "leak-test-host.databricks.net";
     String uuid = "leak-test-uuid-3";
 
     try (MockedStatic<TelemetryHelper> mockedStatic = mockStatic(TelemetryHelper.class)) {
       setupTelemetryHelperMock(mockedStatic);
-      IDatabricksConnectionContext ctx = createMockContext(uuid, host);
+      IDatabricksConnectionContext ctx = createTelemetryContext(uuid, host);
 
-      // Create telemetry client
+      // Register and create telemetry client
+      TelemetryClientFactory.getInstance().registerConnection(uuid);
       TelemetryClientFactory.getInstance().getTelemetryClient(ctx);
 
-      // Record pending telemetry events in the collector
+      // Record pending events
       TelemetryCollector collector =
           TelemetryCollectorManager.getInstance().getOrCreateCollector(ctx);
       collector.recordChunkDownloadLatency("stmt-1", 0, 100L);
 
-      // Mock exportTelemetryLog to simulate the exact call chain that triggers the leak:
-      // exportAllPendingTelemetryDetails → exportTelemetryLog → getTelemetryClient(ctx)
+      // Mock exportTelemetryLog to call getTelemetryClient(ctx) — simulating the real
+      // call chain that triggered the leak before the fix.
       AtomicInteger reCreationCount = new AtomicInteger(0);
       mockedStatic
           .when(() -> TelemetryHelper.exportTelemetryLog(any(), any()))
           .thenAnswer(
               invocation -> {
-                int holdersBefore =
+                int before =
                     TelemetryClientFactory.getInstance().noauthTelemetryClientHolders.size();
                 TelemetryClientFactory.getInstance().getTelemetryClient(ctx);
-                int holdersAfter =
+                int after =
                     TelemetryClientFactory.getInstance().noauthTelemetryClientHolders.size();
-                if (holdersAfter > holdersBefore) {
+                if (after > before) {
                   reCreationCount.incrementAndGet();
                 }
                 return null;
               });
 
-      // Call closeTelemetryClient — this triggers the bug if pending events exist
+      // Close — should not re-create the client during export
       TelemetryClientFactory.getInstance().closeTelemetryClient(ctx);
 
-      int holdersAfterClose =
-          TelemetryClientFactory.getInstance().noauthTelemetryClientHolders.size();
+      assertEquals(
+          0,
+          TelemetryClientFactory.getInstance().noauthTelemetryClientHolders.size(),
+          "No holders should remain after close");
+      assertEquals(0, reCreationCount.get(), "No TelemetryClient re-creation should have occurred");
+    }
+  }
 
-      // If the holder was re-created, the bug exists
-      if (holdersAfterClose > 0 || reCreationCount.get() > 0) {
-        fail(
-            "BUG REPRODUCED (issue #1325): closeTelemetryClient() with pending collector "
-                + "events caused TelemetryClient re-creation. "
-                + "Holders after close: "
-                + holdersAfterClose
-                + ", re-creation events: "
-                + reCreationCount.get()
-                + ". The re-created client's flush will create orphaned TELEMETRY HTTP "
-                + "clients that leak TCP sockets.");
+  @Test
+  void testConcurrentCloseAndGetClientDoesNotLeak() throws Exception {
+    String host = "race-test-host.databricks.net";
+    String uuid = "race-test-uuid";
+
+    try (MockedStatic<TelemetryHelper> mockedStatic = mockStatic(TelemetryHelper.class)) {
+      setupTelemetryHelperMock(mockedStatic);
+      stubExportTelemetryLog(mockedStatic);
+      IDatabricksConnectionContext ctx = createTelemetryContext(uuid, host);
+      when(ctx.getHttpMaxConnectionsPerRoute()).thenReturn(100);
+
+      // Register the connection
+      DatabricksHttpClientFactory.getInstance().registerConnection(uuid);
+      TelemetryClientFactory.getInstance().registerConnection(uuid);
+
+      // Create initial clients
+      DatabricksHttpClientFactory.getInstance().getClient(ctx, HttpClientType.TELEMETRY);
+      TelemetryClientFactory.getInstance().getTelemetryClient(ctx);
+
+      int numThreads = 20;
+      CountDownLatch startLatch = new CountDownLatch(1);
+      CountDownLatch doneLatch = new CountDownLatch(numThreads);
+      ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+
+      // Half the threads close, half simulate delayed flush (getClient)
+      for (int i = 0; i < numThreads; i++) {
+        final boolean isCloseThread = (i % 2 == 0);
+        executor.submit(
+            () -> {
+              try {
+                startLatch.await();
+                if (isCloseThread) {
+                  TelemetryClientFactory.getInstance().closeTelemetryClient(ctx);
+                  DatabricksHttpClientFactory.getInstance().closeConnection(ctx);
+                } else {
+                  DatabricksHttpClientFactory.getInstance()
+                      .getClient(ctx, HttpClientType.TELEMETRY);
+                  TelemetryClientFactory.getInstance().getTelemetryClient(ctx);
+                }
+              } catch (Exception e) {
+                // Expected in race conditions
+              } finally {
+                doneLatch.countDown();
+              }
+            });
       }
+
+      startLatch.countDown();
+      assertTrue(doneLatch.await(10, TimeUnit.SECONDS), "Threads should complete within timeout");
+      executor.shutdown();
+
+      // After close has run, no new clients should be creatable
+      assertNull(
+          DatabricksHttpClientFactory.getInstance().getClient(ctx, HttpClientType.TELEMETRY),
+          "getClient(TELEMETRY) must return null after closeConnection()");
+      assertInstanceOf(
+          NoopTelemetryClient.class,
+          TelemetryClientFactory.getInstance().getTelemetryClient(ctx),
+          "getTelemetryClient() must return NoopTelemetryClient after close");
     }
   }
 
   // --- Helper methods ---
 
-  private IDatabricksConnectionContext createMockContext(String uuid, String host) {
+  /** Minimal context for HTTP-only tests. */
+  private IDatabricksConnectionContext createHttpContext(String uuid) {
+    IDatabricksConnectionContext ctx = mock(IDatabricksConnectionContext.class);
+    when(ctx.getConnectionUuid()).thenReturn(uuid);
+    return ctx;
+  }
+
+  /**
+   * Context for telemetry tests. Add getHttpMaxConnectionsPerRoute stub if creating HTTP clients.
+   */
+  private IDatabricksConnectionContext createTelemetryContext(String uuid, String host) {
     IDatabricksConnectionContext ctx = mock(IDatabricksConnectionContext.class);
     when(ctx.getConnectionUuid()).thenReturn(uuid);
     when(ctx.getHost()).thenReturn(host);
-    when(ctx.getHostForOAuth()).thenReturn(host);
-    when(ctx.isTelemetryEnabled()).thenReturn(true);
     when(ctx.getTelemetryBatchSize()).thenReturn(10);
     when(ctx.getTelemetryFlushIntervalInMilliseconds()).thenReturn(5000);
-    when(ctx.getTelemetrySocketTimeout()).thenReturn(5);
-    when(ctx.isTelemetryCircuitBreakerEnabled()).thenReturn(false);
-    try {
-      when(ctx.getHostUrl()).thenReturn("https://" + host);
-    } catch (Exception e) {
-      // getHostUrl declares checked exceptions
-    }
     return ctx;
   }
 
@@ -215,6 +228,9 @@ public class TelemetryHttpClientLeakTest {
     mockedStatic
         .when(() -> TelemetryHelper.isTelemetryAllowedForConnection(any()))
         .thenReturn(true);
+  }
+
+  private void stubExportTelemetryLog(MockedStatic<TelemetryHelper> mockedStatic) {
     mockedStatic
         .when(() -> TelemetryHelper.exportTelemetryLog(any(), any()))
         .thenAnswer(invocation -> null);

@@ -25,6 +25,7 @@ import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,6 +47,12 @@ public class DatabricksHttpClientTest {
   @BeforeEach
   public void setUp() {
     databricksHttpClient = new DatabricksHttpClient(mockHttpClient, mockConnectionManager);
+    DatabricksHttpClientFactory.getInstance().reset();
+  }
+
+  @AfterEach
+  public void tearDown() {
+    DatabricksHttpClientFactory.getInstance().reset();
   }
 
   @Test
@@ -224,6 +231,10 @@ public class DatabricksHttpClientTest {
     when(connectionContext2.getConnectionUuid()).thenReturn("sample-uuid-2");
     when(connectionContext2.getHttpMaxConnectionsPerRoute()).thenReturn(100);
 
+    // Register connections (allowlist) before getting clients
+    DatabricksHttpClientFactory.getInstance().registerConnection("sample-uuid-1");
+    DatabricksHttpClientFactory.getInstance().registerConnection("sample-uuid-2");
+
     // Get instances of DatabricksHttpClient for each context
     IDatabricksHttpClient client1 =
         DatabricksHttpClientFactory.getInstance().getClient(connectionContext1);
@@ -269,9 +280,10 @@ public class DatabricksHttpClientTest {
               () -> {
                 IDatabricksConnectionContext connectionContext =
                     mock(IDatabricksConnectionContext.class);
-                when(connectionContext.getConnectionUuid())
-                    .thenReturn(UUID.randomUUID().toString());
+                String uuid = UUID.randomUUID().toString();
+                when(connectionContext.getConnectionUuid()).thenReturn(uuid);
                 when(connectionContext.getHttpMaxConnectionsPerRoute()).thenReturn(100);
+                DatabricksHttpClientFactory.getInstance().registerConnection(uuid);
                 IDatabricksHttpClient client =
                     DatabricksHttpClientFactory.getInstance().getClient(connectionContext);
                 clientSet.add(client);
