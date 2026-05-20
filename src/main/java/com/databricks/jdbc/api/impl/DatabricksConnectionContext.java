@@ -57,6 +57,7 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
   private Supplier<DatabricksClientType> clientTypeSupplier;
   @VisibleForTesting final ImmutableMap<String, String> parameters;
   @VisibleForTesting final String connectionUuid;
+  private final boolean enableArrow;
 
   private DatabricksConnectionContext(
       String connectionURL,
@@ -73,6 +74,7 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
     this.customHeaders = parseCustomHeaders(parameters);
     this.computeResource = buildCompute();
     this.connectionUuid = UUID.randomUUID().toString();
+    this.enableArrow = resolveEnableArrow();
     this.clientTypeSupplier =
         new Supplier<>() {
           private DatabricksClientType cType;
@@ -97,6 +99,7 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
     this.customHeaders = parseCustomHeaders(parameters);
     this.computeResource = null;
     this.connectionUuid = UUID.randomUUID().toString();
+    this.enableArrow = resolveEnableArrow();
   }
 
   /**
@@ -669,6 +672,11 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
 
   @Override
   public Boolean shouldEnableArrow() {
+    return enableArrow;
+  }
+
+  /** Evaluates the Arrow enablement once at construction time. */
+  private boolean resolveEnableArrow() {
     // Arrow is always enabled unless running on AIX or IBM Power (which have known
     // issues with the Arrow native library). The EnableArrow connection property is
     // deprecated and its value is ignored on non-AIX/IBM platforms.
