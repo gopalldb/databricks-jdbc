@@ -60,16 +60,12 @@ public class DatabricksConnection implements IDatabricksConnection, IDatabricksC
     this.session = new DatabricksSession(connectionContext, testDatabricksClient);
     UserAgentManager.setUserAgent(connectionContext);
     TelemetryHelper.updateTelemetryAppName(connectionContext, null);
-    String uuid = connectionContext.getConnectionUuid();
-    DatabricksHttpClientFactory.getInstance().registerConnection(uuid);
-    TelemetryClientFactory.getInstance().registerConnection(uuid);
+    TelemetryClientFactory.getInstance().registerConnection(connectionContext.getConnectionUuid());
   }
 
   @Override
   public void open() throws SQLException {
-    String uuid = connectionContext.getConnectionUuid();
-    DatabricksHttpClientFactory.getInstance().registerConnection(uuid);
-    TelemetryClientFactory.getInstance().registerConnection(uuid);
+    TelemetryClientFactory.getInstance().registerConnection(connectionContext.getConnectionUuid());
     this.session.open();
   }
 

@@ -231,10 +231,6 @@ public class DatabricksHttpClientTest {
     when(connectionContext2.getConnectionUuid()).thenReturn("sample-uuid-2");
     when(connectionContext2.getHttpMaxConnectionsPerRoute()).thenReturn(100);
 
-    // Register connections (allowlist) before getting clients
-    DatabricksHttpClientFactory.getInstance().registerConnection("sample-uuid-1");
-    DatabricksHttpClientFactory.getInstance().registerConnection("sample-uuid-2");
-
     // Get instances of DatabricksHttpClient for each context
     IDatabricksHttpClient client1 =
         DatabricksHttpClientFactory.getInstance().getClient(connectionContext1);
@@ -283,7 +279,6 @@ public class DatabricksHttpClientTest {
                 String uuid = UUID.randomUUID().toString();
                 when(connectionContext.getConnectionUuid()).thenReturn(uuid);
                 when(connectionContext.getHttpMaxConnectionsPerRoute()).thenReturn(100);
-                DatabricksHttpClientFactory.getInstance().registerConnection(uuid);
                 IDatabricksHttpClient client =
                     DatabricksHttpClientFactory.getInstance().getClient(connectionContext);
                 clientSet.add(client);

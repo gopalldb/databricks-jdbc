@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import com.databricks.jdbc.api.internal.IDatabricksConnectionContext;
 import com.databricks.jdbc.common.HttpClientType;
+import com.databricks.jdbc.dbclient.impl.http.ClosedConnectionHttpClient;
 import com.databricks.jdbc.dbclient.impl.http.DatabricksHttpClientFactory;
 import com.databricks.jdbc.telemetry.latency.TelemetryCollector;
 import com.databricks.jdbc.telemetry.latency.TelemetryCollectorManager;
@@ -76,17 +77,18 @@ public class TelemetryHttpClientLeakTest {
     String uuid = "leak-test-uuid-2";
     IDatabricksConnectionContext ctx = createHttpContext(uuid);
 
-    // Register, then close
-    DatabricksHttpClientFactory.getInstance().registerConnection(uuid);
+    // Close the connection
     DatabricksHttpClientFactory.getInstance().closeConnection(ctx);
 
-    // After close, getClient should return null
-    assertNull(
+    // After close, getClient should return the ClosedConnectionHttpClient sentinel
+    assertInstanceOf(
+        ClosedConnectionHttpClient.class,
         DatabricksHttpClientFactory.getInstance().getClient(ctx, HttpClientType.TELEMETRY),
-        "getClient(TELEMETRY) should return null after closeConnection (issue #1325)");
-    assertNull(
+        "getClient(TELEMETRY) should return sentinel after closeConnection (issue #1325)");
+    assertInstanceOf(
+        ClosedConnectionHttpClient.class,
         DatabricksHttpClientFactory.getInstance().getClient(ctx, HttpClientType.COMMON),
-        "getClient(COMMON) should return null after closeConnection");
+        "getClient(COMMON) should return sentinel after closeConnection");
   }
 
   @Test
@@ -147,8 +149,7 @@ public class TelemetryHttpClientLeakTest {
       IDatabricksConnectionContext ctx = createTelemetryContext(uuid, host);
       when(ctx.getHttpMaxConnectionsPerRoute()).thenReturn(100);
 
-      // Register the connection
-      DatabricksHttpClientFactory.getInstance().registerConnection(uuid);
+      // Register the telemetry connection (HTTP factory uses tombstones, no registration needed)
       TelemetryClientFactory.getInstance().registerConnection(uuid);
 
       // Create initial clients
@@ -187,10 +188,11 @@ public class TelemetryHttpClientLeakTest {
       assertTrue(doneLatch.await(10, TimeUnit.SECONDS), "Threads should complete within timeout");
       executor.shutdown();
 
-      // After close has run, no new clients should be creatable
-      assertNull(
+      // After close has run, getClient should return the sentinel
+      assertInstanceOf(
+          ClosedConnectionHttpClient.class,
           DatabricksHttpClientFactory.getInstance().getClient(ctx, HttpClientType.TELEMETRY),
-          "getClient(TELEMETRY) must return null after closeConnection()");
+          "getClient(TELEMETRY) must return sentinel after closeConnection()");
       assertInstanceOf(
           NoopTelemetryClient.class,
           TelemetryClientFactory.getInstance().getTelemetryClient(ctx),
