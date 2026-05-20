@@ -1003,33 +1003,37 @@ public class DatabricksStatement implements IDatabricksStatement, IDatabricksSta
     noMoreResults = false;
     updateCount = -1;
 
-    // Close the previous server-side operation if still open. This prevents resource
-    // leaks when a Statement is re-executed without closing the previous ResultSet.
+    // Close the previous server-side operation if still open. Fire-and-forget on a
+    // daemon thread so the new execution is not blocked by the close RPC latency.
     // If the user closed the ResultSet before re-executing (best practice), the
     // proactive close already set serverOperationClosed=true and this is a no-op.
-    //
-    // Skip if: (1) no previous execution (statementId==null),
-    //          (2) server already closed the operation (direct/inline results), or
-    //          (3) client already proactively closed it (via ResultSet.close()).
     if (statementId != null && !directResultsReceived && !serverOperationClosed) {
-      try {
-        connection.getSession().getDatabricksClient().closeStatement(statementId);
-        serverOperationClosed = true;
-      } catch (SQLException | RuntimeException e) {
-        // Don't block re-execution if closing the previous operation fails.
-        // This covers: network errors, operation already expired/evicted on server,
-        // and transport-level errors (e.g., unexpected server responses).
-        // The new execution will create a fresh operation with a new statementId.
-        LOGGER.warn(
-            "Failed to close previous server operation {} during re-execution: {}",
-            statementId,
-            e.getMessage(),
-            e);
-      }
+      // Mark as closed immediately so resultSet.close() below doesn't fire a duplicate.
+      serverOperationClosed = true;
+      final StatementId prevStatementId = statementId;
+      final IDatabricksClient prevClient = connection.getSession().getDatabricksClient();
+      Thread closeThread =
+          new Thread(
+              () -> {
+                try {
+                  prevClient.closeStatement(prevStatementId);
+                  LOGGER.debug(
+                      "Closed previous server operation {} during re-execution", prevStatementId);
+                } catch (SQLException | RuntimeException e) {
+                  LOGGER.warn(
+                      "Failed to close previous server operation {} during re-execution: {}",
+                      prevStatementId,
+                      e.getMessage(),
+                      e);
+                }
+              });
+      closeThread.setDaemon(true);
+      closeThread.setName("close-stmt-" + prevStatementId);
+      closeThread.start();
     }
 
     // Close the previous ResultSet. closeServerOperation() inside resultSet.close()
-    // will be a no-op since serverOperationClosed is already true from above.
+    // is a no-op since serverOperationClosed is already true.
     if (resultSet != null) {
       try {
         resultSet.close();

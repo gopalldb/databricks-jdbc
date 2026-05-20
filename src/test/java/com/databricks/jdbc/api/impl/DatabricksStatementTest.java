@@ -1065,10 +1065,10 @@ public class DatabricksStatementTest {
     StatementId firstStatementId = new StatementId("first-stmt-id");
     statement.setStatementId(firstStatementId);
 
-    // Second execution — should close the first server operation
+    // Second execution — should close the first server operation asynchronously
     statement.executeQuery(STATEMENT);
 
-    verify(client, times(1)).closeStatement(eq(firstStatementId));
+    verify(client, timeout(5000).times(1)).closeStatement(eq(firstStatementId));
     verify(firstResult, times(1)).close();
     assertEquals(secondResult, statement.getResultSet());
   }
@@ -1139,6 +1139,8 @@ public class DatabricksStatementTest {
     // Re-execution should succeed even though closing previous operation failed
     assertDoesNotThrow(() -> statement.executeQuery(STATEMENT));
     assertEquals(secondResult, statement.getResultSet());
+    // Verify the async close was attempted
+    verify(client, timeout(5000).times(1)).closeStatement(eq(firstStatementId));
   }
 
   @Test
@@ -1177,6 +1179,8 @@ public class DatabricksStatementTest {
     // The new execution creates a fresh server operation with a new statementId.
     assertDoesNotThrow(() -> statement.executeQuery(STATEMENT));
     assertEquals(secondResult, statement.getResultSet());
+    // Verify the async close was attempted
+    verify(client, timeout(5000).times(1)).closeStatement(eq(firstStatementId));
   }
 
   @Test
