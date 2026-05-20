@@ -20,15 +20,20 @@ public class DatabricksHttpClientFactory {
       instances = new ConcurrentHashMap<>();
 
   /**
-   * Tracks connection UUIDs that are currently open. When a connection closes, its UUID is removed
-   * from this set. The {@link #getClient} method checks this set inside the {@code computeIfAbsent}
-   * lambda to atomically reject client creation for closed connections.
+   * Tracks connection UUIDs that are currently open. A UUID is added on {@link #registerConnection}
+   * and removed on {@link #closeConnection}. The guard in {@link #getClient} rejects only UUIDs
+   * that were registered and then removed (explicitly closed). Unregistered UUIDs pass through —
+   * they represent callers constructed before registration (auth providers, thrift accessors).
    *
-   * <p>This allowlist approach (vs. a denylist of closed UUIDs) ensures the set naturally shrinks
-   * as connections close, avoiding unbounded heap growth in long-running JVMs (e.g., CRaC). See
-   * GitHub issue #1325.
+   * <p>The set shrinks as connections close, avoiding unbounded heap growth. See issue #1325.
    */
   private final Set<String> openConnections = ConcurrentHashMap.newKeySet();
+
+  /**
+   * Tracks UUIDs that have ever been registered. Distinguishes "never registered" (allow) from
+   * "registered then closed" (reject). Both sets shrink together on {@link #closeConnection}.
+   */
+  private final Set<String> everRegistered = ConcurrentHashMap.newKeySet();
 
   private DatabricksHttpClientFactory() {
     // Private constructor to prevent instantiation
@@ -45,6 +50,7 @@ public class DatabricksHttpClientFactory {
   public void registerConnection(String connectionUuid) {
     if (connectionUuid != null) {
       openConnections.add(connectionUuid);
+      everRegistered.add(connectionUuid);
     }
   }
 
@@ -64,8 +70,11 @@ public class DatabricksHttpClientFactory {
     return instances.computeIfAbsent(
         getClientKey(connectionUuid, type),
         k -> {
-          // Guard: reject creation for closed (or never-registered) connections.
-          if (connectionUuid != null && !openConnections.contains(connectionUuid)) {
+          // Guard: reject creation for connections that were registered then closed.
+          // Unregistered UUIDs pass through (callers before registerConnection).
+          if (connectionUuid != null
+              && everRegistered.contains(connectionUuid)
+              && !openConnections.contains(connectionUuid)) {
             LOGGER.debug(
                 "Rejecting getClient() for closed connection {} with type {}",
                 connectionUuid,
@@ -127,6 +136,7 @@ public class DatabricksHttpClientFactory {
             });
     instances.clear();
     openConnections.clear();
+    everRegistered.clear();
   }
 
   private SimpleEntry<String, HttpClientType> getClientKey(String uuid, HttpClientType clientType) {

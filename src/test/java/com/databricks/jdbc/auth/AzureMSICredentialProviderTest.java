@@ -7,7 +7,6 @@ import static org.mockito.Mockito.*;
 
 import com.databricks.jdbc.api.internal.IDatabricksConnectionContext;
 import com.databricks.jdbc.dbclient.IDatabricksHttpClient;
-import com.databricks.jdbc.dbclient.impl.http.DatabricksHttpClientFactory;
 import com.databricks.jdbc.exception.DatabricksHttpException;
 import com.databricks.jdbc.model.telemetry.enums.DatabricksDriverErrorCode;
 import com.databricks.sdk.core.DatabricksConfig;
@@ -60,7 +59,6 @@ public class AzureMSICredentialProviderTest {
     when(mockConnectionContext.getAzureWorkspaceResourceId()).thenReturn(TEST_RESOURCE_ID);
     when(mockConnectionContext.getConnectionUuid()).thenReturn(TEST_STRING);
     when(mockConnectionContext.getHttpMaxConnectionsPerRoute()).thenReturn(100);
-    DatabricksHttpClientFactory.getInstance().registerConnection(TEST_STRING);
     // Cover the constructor too
     AzureMSICredentialProvider provider = new AzureMSICredentialProvider(mockConnectionContext);
     assertEquals("azure-msi", provider.authType());

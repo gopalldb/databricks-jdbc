@@ -11,7 +11,6 @@ import com.databricks.jdbc.api.impl.volume.VolumeOperationResult;
 import com.databricks.jdbc.api.internal.IDatabricksConnectionContext;
 import com.databricks.jdbc.api.internal.IDatabricksStatementInternal;
 import com.databricks.jdbc.dbclient.impl.common.StatementId;
-import com.databricks.jdbc.dbclient.impl.http.DatabricksHttpClientFactory;
 import com.databricks.jdbc.exception.DatabricksSQLFeatureNotSupportedException;
 import com.databricks.jdbc.model.client.thrift.generated.*;
 import com.databricks.jdbc.model.core.ResultData;
@@ -60,7 +59,6 @@ public class ExecutionResultFactoryTest {
   public void testGetResultSet_externalLink() throws SQLException {
     when(connectionContext.getConnectionUuid()).thenReturn("sample-uuid");
     when(connectionContext.getHttpMaxConnectionsPerRoute()).thenReturn(100);
-    DatabricksHttpClientFactory.getInstance().registerConnection("sample-uuid");
     when(session.getConnectionContext()).thenReturn(connectionContext);
     when(session.getConnectionContext().getCloudFetchThreadPoolSize()).thenReturn(16);
     ResultManifest manifest = new ResultManifest();
@@ -96,7 +94,6 @@ public class ExecutionResultFactoryTest {
   public void testGetResultSet_volumeOperationThriftResp() throws Exception {
     when(connectionContext.getConnectionUuid()).thenReturn("sample-uuid");
     when(connectionContext.getHttpMaxConnectionsPerRoute()).thenReturn(100);
-    DatabricksHttpClientFactory.getInstance().registerConnection("sample-uuid");
     when(session.getConnectionContext()).thenReturn(connectionContext);
     when(fetchResultsResp.getResultSetMetadata()).thenReturn(resultSetMetadataResp);
     when(resultSetMetadataResp.getResultFormat()).thenReturn(TSparkRowSetType.COLUMN_BASED_SET);

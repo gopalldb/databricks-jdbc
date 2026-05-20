@@ -42,6 +42,8 @@ public class TelemetryClientFactory {
    */
   @VisibleForTesting final Set<String> openConnectionUuids = ConcurrentHashMap.newKeySet();
 
+  @VisibleForTesting final Set<String> everRegisteredUuids = ConcurrentHashMap.newKeySet();
+
   private final ExecutorService telemetryExecutorService;
   private ScheduledExecutorService sharedSchedulerService;
 
@@ -89,14 +91,15 @@ public class TelemetryClientFactory {
   public void registerConnection(String connectionUuid) {
     if (connectionUuid != null) {
       openConnectionUuids.add(connectionUuid);
+      everRegisteredUuids.add(connectionUuid);
     }
   }
 
   public ITelemetryClient getTelemetryClient(IDatabricksConnectionContext connectionContext) {
-    // Check allowlist FIRST — avoid expensive isTelemetryAllowedForConnection() for closed
-    // connections.
+    // Reject connections that were registered and then closed (issue #1325).
+    // Unregistered UUIDs pass through (callers before registerConnection).
     String uuid = connectionContext.getConnectionUuid();
-    if (uuid != null && !openConnectionUuids.contains(uuid)) {
+    if (uuid != null && everRegisteredUuids.contains(uuid) && !openConnectionUuids.contains(uuid)) {
       return NoopTelemetryClient.getInstance();
     }
     if (!isTelemetryAllowedForConnection(connectionContext)) {
@@ -252,6 +255,7 @@ public class TelemetryClientFactory {
     telemetryClientHolders.clear();
     noauthTelemetryClientHolders.clear();
     openConnectionUuids.clear();
+    everRegisteredUuids.clear();
 
     // Clear cached connection parameters
     TelemetryHelper.clearConnectionParameterCache();
