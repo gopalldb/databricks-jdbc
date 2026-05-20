@@ -82,13 +82,9 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
   // for the lifetime of a result set.
   private final TelemetryCollector cachedTelemetryCollector;
 
-  // Client-side maxRows enforcement. This central check in next() is the primary
-  // enforcement point using the full long precision from getLargeMaxRows(). Some
-  // streaming implementations (StreamingInlineArrowResult, StreamingColumnarResult,
-  // LazyThriftResult, LazyThriftInlineArrowResult) also enforce maxRows internally using int
-  // precision — those
-  // per-impl checks are secondary and only correct for values within int range.
-  // For values > Integer.MAX_VALUE, only this central check is reliable.
+  // Client-side maxRows enforcement. This central check in next() is the single
+  // enforcement point using the full long precision from getLargeMaxRows().
+  // No per-impl maxRows enforcement exists — all implementations delegate to this check.
   private final long maxRowsLimit;
   private long rowsReturned = 0;
   private boolean truncatedByMaxRows = false; // tracks client-side truncation for cursor methods
@@ -312,10 +308,7 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
     // Client-side maxRows truncation: stop before delegating to the underlying result
     // implementation when the limit has been reached. This is skipped during
     // getUpdateCount() internal iteration (countingUpdateRows) to avoid breaking DML
-    // row counting. Some streaming implementations (StreamingInlineArrowResult,
-    // StreamingColumnarResult, LazyThriftResult, LazyThriftInlineArrowResult) also
-    // enforce maxRows internally; InlineJsonResult and ArrowStreamResult do not —
-    // this central check covers all paths.
+    // row counting. This is the single maxRows enforcement point for all implementations.
     if (maxRowsLimit > 0 && rowsReturned >= maxRowsLimit && !countingUpdateRows) {
       LOGGER.debug(
           "maxRows limit ({}) reached for statement {}; returning false after {} rows",
