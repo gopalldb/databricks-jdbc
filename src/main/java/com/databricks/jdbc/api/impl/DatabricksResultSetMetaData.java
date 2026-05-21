@@ -452,7 +452,14 @@ public class DatabricksResultSetMetaData implements ResultSetMetaData {
       String columnTypeText = columnDataTypes.get(i);
 
       String baseTypeName = metadataResultSetBuilder.stripBaseTypeName(columnTypeText);
-      ColumnInfoTypeName columnTypeName = DatabricksTypeUtil.getColumnInfoType(baseTypeName);
+      ColumnInfoTypeName columnTypeName;
+      // DATE must map to DATE in metadata (not TIMESTAMP). getColumnInfoType maps DATE → TIMESTAMP
+      // for backward compatibility in parameter serialization (setDate), so we handle it here.
+      if (baseTypeName.equals(DatabricksTypeUtil.DATE)) {
+        columnTypeName = ColumnInfoTypeName.DATE;
+      } else {
+        columnTypeName = DatabricksTypeUtil.getColumnInfoType(baseTypeName);
+      }
 
       // Normalize columnTypeText for types that have a canonical display name
       if (baseTypeName.equals(TIMESTAMP_NTZ)) {
