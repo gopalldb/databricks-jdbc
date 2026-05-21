@@ -32,9 +32,9 @@ upgrading. These changes do not affect metadata on All-Purpose Clusters.
 
 * **`PreparedStatement.setDate()` now sends parameter type as `DATE` instead of
   `TIMESTAMP`.** Previously, `setDate()` incorrectly serialized the parameter
-  type as TIMESTAMP in both Thrift and SEA requests due to a mapping bug.
-  Server-side behavior is unchanged (Databricks accepts both), but applications
-  that inspect wire-level parameter types may see the difference.
+  type as TIMESTAMP due to a mapping bug. Server-side behavior is unchanged
+  (Databricks accepts both), but applications that inspect parameter types may
+  see the difference.
 
 #### Default Behavior Changes
 
