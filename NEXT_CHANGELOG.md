@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-### BREAKING CHANGES in 3.4.1 — Metadata JDBC Spec Compliance
+### BREAKING CHANGES in 3.4.1
+
+#### Metadata JDBC Spec Compliance
 
 This release unifies metadata behavior across Thrift and SQL Exec API backends
 using SQL SHOW commands for all metadata operations on SQL warehouses. Several
@@ -28,10 +30,21 @@ upgrading. These changes do not affect metadata on All-Purpose Clusters.
   instead of `0` (`CASCADE`) for Thrift, and `3` instead of `null` for SEA.**
   This reflects that Unity Catalog foreign keys are informational and non-enforced.
 
+#### Default Behavior Changes
+
 * **Native geospatial type support (`GEOMETRY` and `GEOGRAPHY`) is now enabled
   by default.** `getObject()` now returns `IGeometry`/`IGeography` instances
   instead of EWKT strings. Set `EnableGeoSpatialSupport=0` to restore the
   previous behavior.
+
+* **`EnableArrow` connection property is deprecated and ignored.** Arrow
+  serialization is now always enabled. Setting `EnableArrow=0` previously
+  disabled Arrow and forced columnar/JSON inline results; this value is now
+  ignored and a deprecation warning is logged. For JSON inline results with
+  SEA, disable CloudFetch via `EnableQueryResultDownload=0`. Exception: on AIX
+  platforms and PowerPC architectures (`os.arch` contains `ppc`), `EnableArrow`
+  is still honoured and defaults to disabled due to known Arrow native library
+  compatibility issues.
 
 ### Added
 - Metadata operations now use SQL SHOW commands for both Thrift and SEA backends,
