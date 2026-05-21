@@ -91,7 +91,8 @@ class DatabricksTypeUtilTest {
             Map.entry(ColumnInfoTypeName.ARRAY, Types.ARRAY),
             Map.entry(ColumnInfoTypeName.GEOMETRY, Types.OTHER),
             Map.entry(ColumnInfoTypeName.GEOGRAPHY, Types.OTHER),
-            Map.entry(ColumnInfoTypeName.USER_DEFINED_TYPE, Types.OTHER));
+            Map.entry(ColumnInfoTypeName.USER_DEFINED_TYPE, Types.OTHER),
+            Map.entry(ColumnInfoTypeName.VARIANT, Types.OTHER));
 
     expectedMappings.forEach(
         (typeName, expectedSqlType) ->
@@ -132,7 +133,8 @@ class DatabricksTypeUtilTest {
             Map.entry(ColumnInfoTypeName.GEOGRAPHY, GEOGRAPHY_CLASS_NAME),
             Map.entry(ColumnInfoTypeName.MAP, "java.util.Map"),
             Map.entry(ColumnInfoTypeName.NULL, "null"),
-            Map.entry(ColumnInfoTypeName.VOID, "null"));
+            Map.entry(ColumnInfoTypeName.VOID, "null"),
+            Map.entry(ColumnInfoTypeName.VARIANT, "java.lang.String"));
 
     expectedMappings.forEach(
         (columnType, expectedClassName) ->
@@ -191,6 +193,7 @@ class DatabricksTypeUtilTest {
   void testIsSigned() {
     assertTrue(DatabricksTypeUtil.isSigned(ColumnInfoTypeName.INT));
     assertFalse(DatabricksTypeUtil.isSigned(ColumnInfoTypeName.BOOLEAN));
+    assertFalse(DatabricksTypeUtil.isSigned(ColumnInfoTypeName.VARIANT));
   }
 
   @Test
@@ -292,7 +295,7 @@ class DatabricksTypeUtilTest {
     "NVARCHAR, STRING",
     "NCHAR, STRING",
     "INTERVAL, INTERVAL",
-    "VARIANT, STRING",
+    "VARIANT, VARIANT",
     "GEOMETRY, GEOMETRY",
     "GEOGRAPHY, GEOGRAPHY",
     "UNKNOWN, USER_DEFINED_TYPE",
@@ -331,7 +334,7 @@ class DatabricksTypeUtilTest {
 
   @ParameterizedTest
   @CsvSource({
-    "VARIANT, STRING, " + Types.VARCHAR,
+    "VARIANT, VARIANT, " + Types.OTHER,
     "TIMESTAMP, TIMESTAMP, " + Types.TIMESTAMP,
     "TIMESTAMP_NTZ, TIMESTAMP, " + Types.TIMESTAMP,
     "GEOGRAPHY, GEOGRAPHY, " + Types.OTHER,

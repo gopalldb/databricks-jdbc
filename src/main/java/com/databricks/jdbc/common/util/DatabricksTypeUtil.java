@@ -137,7 +137,7 @@ public class DatabricksTypeUtil {
       case DatabricksTypeUtil.INTERVAL:
         return ColumnInfoTypeName.INTERVAL;
       case DatabricksTypeUtil.VARIANT:
-        return ColumnInfoTypeName.STRING;
+        return ColumnInfoTypeName.VARIANT;
       case DatabricksTypeUtil.GEOMETRY:
         return ColumnInfoTypeName.GEOMETRY;
       case DatabricksTypeUtil.GEOGRAPHY:
@@ -193,6 +193,7 @@ public class DatabricksTypeUtil {
         return Types.STRUCT;
       case ARRAY:
         return Types.ARRAY;
+      case VARIANT:
       case GEOMETRY:
       case GEOGRAPHY:
       case USER_DEFINED_TYPE:
@@ -233,6 +234,7 @@ public class DatabricksTypeUtil {
       case CHAR:
       case STRING:
       case INTERVAL:
+      case VARIANT:
       case USER_DEFINED_TYPE:
         return "java.lang.String";
       case TIMESTAMP:
@@ -587,18 +589,22 @@ public class DatabricksTypeUtil {
   }
 
   /**
-   * Checks if the given type name represents a complex type (ARRAY, MAP, STRUCT, GEOMETRY, or
-   * GEOGRAPHY).
+   * Checks if the given type name represents a complex type (ARRAY, MAP, STRUCT).
    *
    * @param typeName The type name to check
-   * @return true if the type name starts with ARRAY, MAP, STRUCT, GEOMETRY, or GEOGRAPHY, false
-   *     otherwise
+   * @return true if the type name starts with ARRAY, MAP, or STRUCT
    */
   public static boolean isComplexType(String typeName) {
-    return typeName.startsWith(ARRAY)
-        || typeName.startsWith(MAP)
-        || typeName.startsWith(STRUCT)
-        || typeName.startsWith(GEOMETRY)
-        || typeName.startsWith(GEOGRAPHY);
+    return typeName.startsWith(ARRAY) || typeName.startsWith(MAP) || typeName.startsWith(STRUCT);
+  }
+
+  /**
+   * Checks if the given type name represents a geospatial type (GEOMETRY, GEOGRAPHY).
+   *
+   * @param typeName The type name to check
+   * @return true if the type name starts with GEOMETRY or GEOGRAPHY
+   */
+  public static boolean isGeospatialType(String typeName) {
+    return typeName.startsWith(GEOMETRY) || typeName.startsWith(GEOGRAPHY);
   }
 }
