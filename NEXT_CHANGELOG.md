@@ -30,6 +30,12 @@ upgrading. These changes do not affect metadata on All-Purpose Clusters.
   instead of `0` (`CASCADE`) for Thrift, and `3` instead of `null` for SEA.**
   This reflects that Unity Catalog foreign keys are informational and non-enforced.
 
+* **`PreparedStatement.setDate()` now sends parameter type as `DATE` instead of
+  `TIMESTAMP`.** Previously, `setDate()` incorrectly serialized the parameter
+  type as TIMESTAMP in both Thrift and SEA requests due to a mapping bug.
+  Server-side behavior is unchanged (Databricks accepts both), but applications
+  that inspect wire-level parameter types may see the difference.
+
 #### Default Behavior Changes
 
 * **Native geospatial type support (`GEOMETRY` and `GEOGRAPHY`) is now enabled

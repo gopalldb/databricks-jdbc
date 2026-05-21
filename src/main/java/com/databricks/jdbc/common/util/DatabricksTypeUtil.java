@@ -95,6 +95,7 @@ public class DatabricksTypeUtil {
       case DatabricksTypeUtil.NVARCHAR:
         return ColumnInfoTypeName.STRING;
       case DatabricksTypeUtil.DATE:
+        return ColumnInfoTypeName.DATE;
       case DatabricksTypeUtil.TIMESTAMP:
       case DatabricksTypeUtil.TIMESTAMP_NTZ:
         return ColumnInfoTypeName.TIMESTAMP;

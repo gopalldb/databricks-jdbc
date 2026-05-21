@@ -266,7 +266,7 @@ class DatabricksTypeUtilTest {
   @ParameterizedTest
   @CsvSource({
     "STRING, STRING",
-    "DATE, TIMESTAMP",
+    "DATE, DATE",
     "TIMESTAMP, TIMESTAMP",
     "TIMESTAMP_NTZ, TIMESTAMP",
     "SHORT, SHORT",
