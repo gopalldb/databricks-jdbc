@@ -14,6 +14,7 @@ import com.databricks.jdbc.exception.*;
 import com.databricks.jdbc.log.JdbcLogger;
 import com.databricks.jdbc.log.JdbcLoggerFactory;
 import com.databricks.jdbc.model.client.thrift.generated.TFetchResultsResp;
+import com.databricks.jdbc.model.client.thrift.generated.TRowSet;
 import com.databricks.jdbc.model.client.thrift.generated.TSparkRowSetType;
 import com.databricks.jdbc.model.core.ResultData;
 import com.databricks.jdbc.model.core.ResultManifest;
@@ -103,6 +104,21 @@ class ExecutionResultFactory {
       case ARROW_BASED_SET:
         return createInlineArrowResult(resultsResp, parentStatement, session);
       case URL_BASED_SET:
+        // Server may declare URL_BASED_SET but inline the data for small results,
+        // leaving resultLinks=null and putting data in arrowBatches instead.
+        // Fall back to inline arrow path when no external links are present
+        // but inline arrow data is available.
+        TRowSet results = resultsResp.getResults();
+        boolean hasResultLinks =
+            results != null
+                && results.getResultLinks() != null
+                && !results.getResultLinks().isEmpty();
+        if (!hasResultLinks && results != null && results.isSetArrowBatches()) {
+          LOGGER.info(
+              "URL_BASED_SET format but no resultLinks with inline arrowBatches present"
+                  + " — falling back to inline arrow path");
+          return createInlineArrowResult(resultsResp, parentStatement, session);
+        }
         return new ArrowStreamResult(resultsResp, parentStatement, session);
       case ROW_BASED_SET:
         throw new DatabricksSQLFeatureNotSupportedException(
