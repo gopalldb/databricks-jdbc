@@ -206,7 +206,7 @@ public enum DatabricksJdbcUrlParams {
       "1"),
   USE_BOUNDED_SEA_API(
       "UseBoundedSeaApi",
-      "Use bounded SEA API for CloudFetch: send row_offset on GetResultData, force StreamingChunkProvider, stop relying on total_chunk_count",
+      "Use bounded SEA API for CloudFetch: send row_offset on GetResultData, force StreamingChunkProvider, stop relying on total_chunk_count. Requires server support.",
       "0"),
   DISABLE_OAUTH_REFRESH_TOKEN(
       "DisableOauthRefreshToken",

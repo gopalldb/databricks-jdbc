@@ -83,7 +83,7 @@ public class StreamingChunkDownloadTask implements Callable<Void> {
               taskTotalMs,
               retries);
 
-        } catch (IOException | SQLException | RuntimeException e) {
+        } catch (IOException | SQLException e) {
           retries++;
           if (retries >= MAX_RETRIES) {
             LOGGER.error(
@@ -91,7 +91,7 @@ public class StreamingChunkDownloadTask implements Callable<Void> {
                 chunk.getChunkIndex(),
                 MAX_RETRIES,
                 e.getMessage());
-            chunk.setStatus(ChunkStatus.DOWNLOAD_FAILED);
+            // Status set to DOWNLOAD_FAILED in the finally block
             throw new DatabricksSQLException(
                 String.format(
                     "Failed to download chunk %d after %d attempts",

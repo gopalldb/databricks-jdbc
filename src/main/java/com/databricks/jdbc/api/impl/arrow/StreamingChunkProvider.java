@@ -611,9 +611,9 @@ public class StreamingChunkProvider implements ChunkProvider {
             c.setChunkLink(link);
           }
         } else {
-          // New chunk from server not yet in our map — create it.
-          // This handles the bounded SEA case where the refresh response
-          // may include chunks beyond our current highestKnownChunkIndex.
+          // Server returned a chunk not yet in our map — create it.
+          // Handles cases where refresh response includes chunks beyond
+          // our current highestKnownChunkIndex.
           try {
             createChunkFromLink(link);
           } catch (Exception e) {
@@ -625,10 +625,17 @@ public class StreamingChunkProvider implements ChunkProvider {
         }
       }
 
-      // Update end-of-stream from refresh response
+      // Update end-of-stream and prefetch index from refresh response
       if (!result.hasMore()) {
         endOfStreamReached = true;
+      } else if (result.getNextFetchIndex() > nextLinkFetchIndex) {
+        // Avoid re-fetching chunks that the refresh already discovered
+        nextLinkFetchIndex = result.getNextFetchIndex();
+        nextRowOffsetToFetch = result.getNextRowOffset();
       }
+
+      // Trigger downloads for any newly-created chunks
+      triggerDownloads();
 
       // Check if our target chunk was refreshed by the batch
       targetChunk = chunks.get(chunkIndex);
