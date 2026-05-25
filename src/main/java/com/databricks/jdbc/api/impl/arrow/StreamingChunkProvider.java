@@ -596,12 +596,13 @@ public class StreamingChunkProvider implements ChunkProvider {
       // Single batch FetchResults RPC from the lowest expired offset
       ChunkLinkFetchResult result = linkFetcher.fetchLinks(minExpiredIndex, minExpiredRowOffset);
 
-      // Update ALL pre-download chunks that received fresh links.
-      // Always overwrite even if the current link hasn't expired yet, since the
-      // server-provided link has a later expiry and prevents near-expiry races.
+      // Reconcile ALL links from the refresh response with local chunk state.
       for (ExternalLink link : result.getChunkLinks()) {
         ArrowResultChunk c = chunks.get(link.getChunkIndex());
         if (c != null) {
+          // Existing chunk: update link only for pre-download states.
+          // DOWNLOADING stays as-is (download task owns the state machine).
+          // DOWNLOADED/RELEASED/etc. stay as-is (bytes already in memory).
           ChunkStatus status = c.getStatus();
           if (status == ChunkStatus.PENDING
               || status == ChunkStatus.URL_FETCHED
@@ -609,7 +610,24 @@ public class StreamingChunkProvider implements ChunkProvider {
               || status == ChunkStatus.DOWNLOAD_RETRY) {
             c.setChunkLink(link);
           }
+        } else {
+          // New chunk from server not yet in our map — create it.
+          // This handles the bounded SEA case where the refresh response
+          // may include chunks beyond our current highestKnownChunkIndex.
+          try {
+            createChunkFromLink(link);
+          } catch (Exception e) {
+            LOGGER.debug(
+                "Failed to create chunk {} from refresh response: {}",
+                link.getChunkIndex(),
+                e.getMessage());
+          }
         }
+      }
+
+      // Update end-of-stream from refresh response
+      if (!result.hasMore()) {
+        endOfStreamReached = true;
       }
 
       // Check if our target chunk was refreshed by the batch
