@@ -102,7 +102,9 @@ public class ArrowStreamResult implements IExecutionResult {
 
     IDatabricksConnectionContext connectionContext = session.getConnectionContext();
 
-    if (connectionContext.isStreamingChunkProviderEnabled()) {
+    // Bounded SEA API forces StreamingChunkProvider — it doesn't rely on total_chunk_count
+    if (connectionContext.isStreamingChunkProviderEnabled()
+        || connectionContext.isBoundedSeaApiEnabled()) {
       LOGGER.info(
           "Using StreamingChunkProvider for statementId: {}", statementId.toSQLExecStatementId());
 

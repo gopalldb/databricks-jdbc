@@ -1441,6 +1441,11 @@ public class DatabricksConnectionContext implements IDatabricksConnectionContext
   }
 
   @Override
+  public boolean isBoundedSeaApiEnabled() {
+    return getParameter(DatabricksJdbcUrlParams.USE_BOUNDED_SEA_API).equals("1");
+  }
+
+  @Override
   public int getThriftMaxBatchesInMemory() {
     try {
       return Integer.parseInt(getParameter(DatabricksJdbcUrlParams.THRIFT_MAX_BATCHES_IN_MEMORY));

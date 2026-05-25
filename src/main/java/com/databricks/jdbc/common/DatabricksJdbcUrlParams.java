@@ -204,6 +204,10 @@ public enum DatabricksJdbcUrlParams {
       "EnableSeaSyncMetadata",
       "Enable x-databricks-sea-can-run-fully-sync header for synchronous metadata requests in SEA mode",
       "1"),
+  USE_BOUNDED_SEA_API(
+      "UseBoundedSeaApi",
+      "Use bounded SEA API for CloudFetch: send row_offset on GetResultData, force StreamingChunkProvider, stop relying on total_chunk_count",
+      "0"),
   DISABLE_OAUTH_REFRESH_TOKEN(
       "DisableOauthRefreshToken",
       "Disable requesting OAuth refresh tokens (omit offline_access unless explicitly provided)",

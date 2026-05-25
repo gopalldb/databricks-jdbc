@@ -461,6 +461,9 @@ public interface IDatabricksConnectionContext {
    */
   boolean isCloudFetchEnabled();
 
+  /** Returns whether bounded SEA API mode is enabled for CloudFetch. */
+  boolean isBoundedSeaApiEnabled();
+
   /**
    * Returns the maximum number of batches to keep in memory for Thrift streaming.
    *
