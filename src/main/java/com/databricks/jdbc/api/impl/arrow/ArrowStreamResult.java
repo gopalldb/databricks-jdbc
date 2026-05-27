@@ -115,10 +115,13 @@ public class ArrowStreamResult implements IExecutionResult {
       int chunkReadyTimeoutSeconds = connectionContext.getChunkReadyTimeoutSeconds();
       double cloudFetchSpeedThreshold = connectionContext.getCloudFetchSpeedThreshold();
 
-      // Convert ExternalLinks to ChunkLinkFetchResult for the provider
+      // Convert ExternalLinks to ChunkLinkFetchResult for the provider.
+      // Bounded SEA API: pass null for totalChunkCount — we must not depend on
+      // manifest.{chunks, total_chunk_count, total_row_count} per the bounded API contract.
+      Long totalChunkCount =
+          connectionContext.isBoundedSeaApiEnabled() ? null : resultManifest.getTotalChunkCount();
       ChunkLinkFetchResult initialLinks =
-          convertToChunkLinkFetchResult(
-              resultData.getExternalLinks(), resultManifest.getTotalChunkCount());
+          convertToChunkLinkFetchResult(resultData.getExternalLinks(), totalChunkCount);
 
       return new StreamingChunkProvider(
           linkFetcher,
