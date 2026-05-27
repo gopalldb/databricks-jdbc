@@ -47,6 +47,17 @@ import javax.annotation.Nonnull;
  */
 public class StreamingChunkProvider implements ChunkProvider {
 
+  /** Immutable holder for the next fetch position — ensures atomic reads of (index, rowOffset). */
+  private static final class FetchPosition {
+    final long chunkIndex;
+    final long rowOffset;
+
+    FetchPosition(long chunkIndex, long rowOffset) {
+      this.chunkIndex = chunkIndex;
+      this.rowOffset = rowOffset;
+    }
+  }
+
   private static final JdbcLogger LOGGER =
       JdbcLoggerFactory.getLogger(StreamingChunkProvider.class);
   private static final String DOWNLOAD_THREAD_PREFIX = "databricks-jdbc-streaming-downloader-";
@@ -75,8 +86,11 @@ public class StreamingChunkProvider implements ChunkProvider {
   // - nextDownloadIndex: written only under downloadLock, but AtomicLong for consistency
   private final AtomicLong currentChunkIndex = new AtomicLong(-1);
   private final AtomicLong highestKnownChunkIndex = new AtomicLong(-1);
-  private volatile long nextLinkFetchIndex = 0;
-  private volatile long nextRowOffsetToFetch = 0;
+  // Bundled as an immutable pair for atomic reads/writes across threads.
+  // The prefetch thread reads this (fetchNextLinkBatch) while the download thread
+  // may update it (getRefreshedLink reconciliation). A volatile reference to an
+  // immutable holder ensures both fields are always read consistently.
+  private volatile FetchPosition nextFetchPosition = new FetchPosition(0, 0);
   private final AtomicLong nextDownloadIndex = new AtomicLong(0);
 
   // State flags
@@ -347,11 +361,11 @@ public class StreamingChunkProvider implements ChunkProvider {
           long targetIndex = currentChunkIndex.get() + linkPrefetchWindow;
 
           // Wait if we're caught up
-          while (!endOfStreamReached && nextLinkFetchIndex > targetIndex) {
+          while (!endOfStreamReached && nextFetchPosition.chunkIndex > targetIndex) {
             if (closed) break;
             LOGGER.debug(
                 "Prefetch caught up, waiting for consumer. next={}, target={}",
-                nextLinkFetchIndex,
+                nextFetchPosition.chunkIndex,
                 targetIndex);
             consumerAdvanced.await();
             targetIndex = currentChunkIndex.get() + linkPrefetchWindow;
@@ -396,13 +410,14 @@ public class StreamingChunkProvider implements ChunkProvider {
       return;
     }
 
+    FetchPosition pos = nextFetchPosition;
     LOGGER.debug(
         "Fetching links starting from index {}, row offset {} for statement {}",
-        nextLinkFetchIndex,
-        nextRowOffsetToFetch,
+        pos.chunkIndex,
+        pos.rowOffset,
         statementId);
 
-    ChunkLinkFetchResult result = linkFetcher.fetchLinks(nextLinkFetchIndex, nextRowOffsetToFetch);
+    ChunkLinkFetchResult result = linkFetcher.fetchLinks(pos.chunkIndex, pos.rowOffset);
 
     if (result.isEndOfStream()) {
       LOGGER.info("End of stream reached for statement {}", statementId);
@@ -415,10 +430,9 @@ public class StreamingChunkProvider implements ChunkProvider {
       createChunkFromLink(link);
     }
 
-    // Update next fetch positions
+    // Update next fetch position atomically
     if (result.hasMore()) {
-      nextLinkFetchIndex = result.getNextFetchIndex();
-      nextRowOffsetToFetch = result.getNextRowOffset();
+      nextFetchPosition = new FetchPosition(result.getNextFetchIndex(), result.getNextRowOffset());
     } else {
       endOfStreamReached = true;
       LOGGER.info("End of stream reached for statement {} (hasMore=false)", statementId);
@@ -450,14 +464,15 @@ public class StreamingChunkProvider implements ChunkProvider {
       createChunkFromLink(link);
     }
 
-    // Set next fetch positions using unified API
+    // Set next fetch position atomically
     if (initialLinks.hasMore()) {
-      nextLinkFetchIndex = initialLinks.getNextFetchIndex();
-      nextRowOffsetToFetch = initialLinks.getNextRowOffset();
+      FetchPosition pos =
+          new FetchPosition(initialLinks.getNextFetchIndex(), initialLinks.getNextRowOffset());
+      nextFetchPosition = pos;
       LOGGER.debug(
           "Next fetch position set to chunk index {}, row offset {} from initial links",
-          nextLinkFetchIndex,
-          nextRowOffsetToFetch);
+          pos.chunkIndex,
+          pos.rowOffset);
     } else {
       endOfStreamReached = true;
       LOGGER.info("End of stream reached from initial links for statement {}", statementId);
@@ -471,11 +486,6 @@ public class StreamingChunkProvider implements ChunkProvider {
    */
   private void createChunkFromLink(ExternalLink link) throws DatabricksParsingException {
     long chunkIndex = link.getChunkIndex();
-    if (chunks.containsKey(chunkIndex)) {
-      LOGGER.debug("Chunk {} already exists, skipping creation", chunkIndex);
-      return;
-    }
-
     long rowCount = link.getRowCount();
     long rowOffset = link.getRowOffset();
 
@@ -488,7 +498,16 @@ public class StreamingChunkProvider implements ChunkProvider {
             .build();
 
     chunk.setChunkLink(link);
-    chunks.put(chunkIndex, chunk);
+
+    // Atomic insert — if another thread already created this chunk, skip.
+    // This is safe because createChunkFromLink can be called concurrently from
+    // the prefetch thread (fetchNextLinkBatch) and download threads (getRefreshedLink).
+    ArrowResultChunk existing = chunks.putIfAbsent(chunkIndex, chunk);
+    if (existing != null) {
+      LOGGER.debug("Chunk {} already exists, skipping creation", chunkIndex);
+      return;
+    }
+
     highestKnownChunkIndex.updateAndGet(current -> Math.max(current, chunkIndex));
     totalRowCount.addAndGet(rowCount);
 
@@ -617,7 +636,7 @@ public class StreamingChunkProvider implements ChunkProvider {
           try {
             createChunkFromLink(link);
           } catch (Exception e) {
-            LOGGER.debug(
+            LOGGER.warn(
                 "Failed to create chunk {} from refresh response: {}",
                 link.getChunkIndex(),
                 e.getMessage());
@@ -625,13 +644,14 @@ public class StreamingChunkProvider implements ChunkProvider {
         }
       }
 
-      // Update end-of-stream and prefetch index from refresh response
+      // Update end-of-stream and prefetch position from refresh response
       if (!result.hasMore()) {
         endOfStreamReached = true;
-      } else if (result.getNextFetchIndex() > nextLinkFetchIndex) {
-        // Avoid re-fetching chunks that the refresh already discovered
-        nextLinkFetchIndex = result.getNextFetchIndex();
-        nextRowOffsetToFetch = result.getNextRowOffset();
+      } else if (result.getNextFetchIndex() > nextFetchPosition.chunkIndex) {
+        // Avoid re-fetching chunks that the refresh already discovered.
+        // Atomic update of both fields via immutable holder.
+        nextFetchPosition =
+            new FetchPosition(result.getNextFetchIndex(), result.getNextRowOffset());
       }
 
       // Trigger downloads for any newly-created chunks
