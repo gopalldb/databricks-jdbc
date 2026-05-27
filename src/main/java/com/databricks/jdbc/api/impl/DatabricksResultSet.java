@@ -77,6 +77,7 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
   private ResultSetType resultSetType = ResultSetType.UNASSIGNED;
 
   private boolean complexDatatypeSupport = false;
+  private boolean boundedSeaApiEnabled = false;
 
   // Cached telemetry collector resolved once at construction time to avoid
   // per-row overhead in next(). The connection-to-collector mapping is stable
@@ -128,6 +129,7 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
       resultSetMetaData = null;
     }
     this.complexDatatypeSupport = session.getConnectionContext().isComplexDatatypeSupportEnabled();
+    this.boundedSeaApiEnabled = session.getConnectionContext().isBoundedSeaApiEnabled();
     this.statementType = statementType;
     this.updateCount = null;
     this.parentStatement = parentStatement;
@@ -933,8 +935,15 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
   public boolean isAfterLast() throws SQLException {
     checkIfClosed();
     // Account for client-side maxRows truncation
-    return truncatedByMaxRows
-        || executionResult.getCurrentRow() >= resultSetMetaData.getTotalRows();
+    if (truncatedByMaxRows) {
+      return true;
+    }
+    // Bounded SEA API: manifest.total_row_count is not populated, so use hasNext()
+    // which derives end-of-stream from next_chunk_index via the chunk provider.
+    if (boundedSeaApiEnabled && executionResult instanceof ArrowStreamResult) {
+      return executionResult.getCurrentRow() >= 0 && !executionResult.hasNext();
+    }
+    return executionResult.getCurrentRow() >= resultSetMetaData.getTotalRows();
   }
 
   @Override
@@ -972,6 +981,10 @@ public class DatabricksResultSet implements IDatabricksResultSet, IDatabricksRes
         || executionResult instanceof StreamingColumnarResult
         || executionResult instanceof LazyThriftInlineArrowResult
         || executionResult instanceof StreamingInlineArrowResult) {
+      return executionResult.getCurrentRow() >= 0 && !executionResult.hasNext();
+    }
+    // Bounded SEA API: manifest.total_row_count is not populated, so use hasNext()
+    if (boundedSeaApiEnabled && executionResult instanceof ArrowStreamResult) {
       return executionResult.getCurrentRow() >= 0 && !executionResult.hasNext();
     }
     return executionResult.getCurrentRow() == resultSetMetaData.getTotalRows() - 1;
