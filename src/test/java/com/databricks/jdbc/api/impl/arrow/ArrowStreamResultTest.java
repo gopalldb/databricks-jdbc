@@ -98,6 +98,90 @@ public class ArrowStreamResultTest {
   }
 
   @Test
+  public void testEmptyChunkProvider() {
+    EmptyChunkProvider provider = new EmptyChunkProvider();
+    assertFalse(provider.hasNextChunk());
+    assertFalse(provider.next());
+    assertNull(provider.getChunk());
+    assertEquals(0, provider.getRowCount());
+    assertEquals(0, provider.getChunkCount());
+    assertFalse(provider.isClosed());
+    provider.close();
+    assertTrue(provider.isClosed());
+  }
+
+  @Test
+  public void testEmptyResultPreservesSchema() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContextFactory.create(JDBC_URL, new Properties());
+    when(session.getConnectionContext()).thenReturn(connectionContext);
+    List<ColumnInfo> columns =
+        List.of(
+            new ColumnInfo().setName("col1").setTypeName(ColumnInfoTypeName.INT).setPosition(0L),
+            new ColumnInfo()
+                .setName("col2")
+                .setTypeName(ColumnInfoTypeName.STRING)
+                .setPosition(1L));
+    ResultManifest resultManifest =
+        new ResultManifest()
+            .setTotalChunkCount(0L)
+            .setTotalRowCount(0L)
+            .setSchema(new ResultSchema().setColumns(columns).setColumnCount(2L));
+    ResultData resultData = new ResultData().setExternalLinks(new ArrayList<>());
+    ArrowStreamResult result =
+        new ArrowStreamResult(resultManifest, resultData, STATEMENT_ID, session);
+
+    assertFalse(result.hasNext());
+    assertFalse(result.next());
+    assertEquals(0, result.getRowCount());
+    assertEquals(0, result.getChunkCount());
+    assertNull(result.getArrowMetadata());
+    result.close();
+  }
+
+  @Test
+  public void testEmptyResultWithNullExternalLinks() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContextFactory.create(JDBC_URL, new Properties());
+    when(session.getConnectionContext()).thenReturn(connectionContext);
+    ResultManifest resultManifest =
+        new ResultManifest()
+            .setTotalChunkCount(0L)
+            .setTotalRowCount(0L)
+            .setSchema(new ResultSchema().setColumns(new ArrayList<>()).setColumnCount(0L));
+    ResultData resultData = new ResultData();
+    ArrowStreamResult result =
+        new ArrowStreamResult(resultManifest, resultData, STATEMENT_ID, session);
+
+    assertFalse(result.hasNext());
+    assertFalse(result.next());
+    assertEquals(0, result.getRowCount());
+    result.close();
+    assertFalse(result.hasNext());
+  }
+
+  @Test
+  public void testEmptyResultRepeatedNextReturnsFalse() throws Exception {
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContextFactory.create(JDBC_URL, new Properties());
+    when(session.getConnectionContext()).thenReturn(connectionContext);
+    ResultManifest resultManifest =
+        new ResultManifest()
+            .setTotalChunkCount(0L)
+            .setTotalRowCount(0L)
+            .setSchema(new ResultSchema().setColumns(new ArrayList<>()).setColumnCount(0L));
+    ResultData resultData = new ResultData().setExternalLinks(new ArrayList<>());
+    ArrowStreamResult result =
+        new ArrowStreamResult(resultManifest, resultData, STATEMENT_ID, session);
+
+    for (int i = 0; i < 5; i++) {
+      assertFalse(result.hasNext());
+      assertFalse(result.next());
+    }
+    result.close();
+  }
+
+  @Test
   public void testIteration() throws Exception {
     // Arrange
     ResultManifest resultManifest =
