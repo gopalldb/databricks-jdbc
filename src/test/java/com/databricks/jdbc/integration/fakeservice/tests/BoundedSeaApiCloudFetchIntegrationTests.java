@@ -43,12 +43,15 @@ public class BoundedSeaApiCloudFetchIntegrationTests extends AbstractFakeService
     statement.setMaxRows(maxRows);
 
     try (ResultSet rs = statement.executeQuery(sql)) {
+      DatabricksResultSetMetaData metaData = (DatabricksResultSetMetaData) rs.getMetaData();
+
       int rowCount = 0;
       while (rs.next()) {
         rowCount++;
       }
 
       assertEquals(maxRows, rowCount);
+      assertTrue(metaData.getIsCloudFetchUsed());
       assertTrue(rs.isAfterLast());
     }
   }

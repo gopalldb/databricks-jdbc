@@ -638,6 +638,7 @@ public class StreamingChunkProvider implements ChunkProvider {
       ChunkLinkFetchResult result = linkFetcher.fetchLinks(minExpiredIndex, minExpiredRowOffset);
 
       // Reconcile ALL links from the refresh response with local chunk state.
+      boolean allRefreshChunksCreated = true;
       for (ExternalLink link : result.getChunkLinks()) {
         ArrowResultChunk c = chunks.get(link.getChunkIndex());
         if (c != null) {
@@ -662,16 +663,19 @@ public class StreamingChunkProvider implements ChunkProvider {
                 "Failed to create chunk {} from refresh response: {}",
                 link.getChunkIndex(),
                 e.getMessage());
+            allRefreshChunksCreated = false;
           }
         }
       }
 
-      // Update end-of-stream and prefetch position from refresh response
+      // Update end-of-stream and prefetch position from refresh response.
+      // Only advance past the refresh window if all chunks were successfully created —
+      // otherwise the prefetch loop would skip the failed chunk, leaving a gap that
+      // causes consumers to hang forever in waitForChunkCreation.
       if (!result.hasMore()) {
         endOfStreamReached = true;
-      } else if (result.getNextFetchIndex() > nextFetchPosition.chunkIndex) {
-        // Avoid re-fetching chunks that the refresh already discovered.
-        // Atomic update of both fields via immutable holder.
+      } else if (result.getNextFetchIndex() > nextFetchPosition.chunkIndex
+          && allRefreshChunksCreated) {
         nextFetchPosition =
             new FetchPosition(result.getNextFetchIndex(), result.getNextRowOffset());
       }
