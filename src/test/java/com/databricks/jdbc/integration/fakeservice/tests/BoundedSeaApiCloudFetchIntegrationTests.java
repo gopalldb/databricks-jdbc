@@ -22,7 +22,10 @@ public class BoundedSeaApiCloudFetchIntegrationTests extends AbstractFakeService
 
     Properties props = new Properties();
     props.setProperty("UseBoundedSeaApi", "1");
-    props.setProperty("EnableSQLExecHybridResults", "1");
+    // Note: UseThriftClient=0 (SEA) is injected by getValidJDBCConnection via
+    // FakeServiceConfigLoader.shouldUseThriftClient() for the SQL_EXEC fake service type.
+    // Do NOT set EnableSQLExecHybridResults here — hybrid mode attempts Thrift TOpenSession
+    // first and these tests have no Thrift session stubs.
     connection = getValidJDBCConnection(props);
   }
 
