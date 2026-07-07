@@ -1568,16 +1568,18 @@ class StreamingChunkProviderTest {
       // Prefetch thread calls fetchLinks(3, 300) to get the second batch
       when(mockLinkFetcher.fetchLinks(eq(3L), eq(300L))).thenReturn(batch1);
 
-      // Coalesced refetch for chunk 1: fetchLinks(1, 100) returns fresh link
+      // Coalesced refetch for chunk 1: fetchLinks(1, 100) returns fresh link for chunk 1 only.
+      // hasMore=true so the refresh doesn't set endOfStreamReached (there are still chunks 3-5).
       ExternalLink freshLink1 = createExternalLink(1, rowsPerChunk, 2L, FAR_FUTURE_EXPIRATION);
       ChunkLinkFetchResult refetchBatch1 =
-          ChunkLinkFetchResult.of(Collections.singletonList(freshLink1), false, -1, 200L);
+          ChunkLinkFetchResult.of(Collections.singletonList(freshLink1), true, 3L, 200L);
       when(mockLinkFetcher.fetchLinks(eq(1L), eq(100L))).thenReturn(refetchBatch1);
 
-      // Coalesced refetch for chunk 4: fetchLinks(4, 400) returns fresh link
+      // Coalesced refetch for chunk 4: fetchLinks(4, 400) returns fresh link for chunk 4 only.
+      // hasMore=true so the refresh doesn't prematurely set endOfStreamReached.
       ExternalLink freshLink4 = createExternalLink(4, rowsPerChunk, 5L, FAR_FUTURE_EXPIRATION);
       ChunkLinkFetchResult refetchBatch4 =
-          ChunkLinkFetchResult.of(Collections.singletonList(freshLink4), false, -1, 500L);
+          ChunkLinkFetchResult.of(Collections.singletonList(freshLink4), true, 5L, 500L);
       when(mockLinkFetcher.fetchLinks(eq(4L), eq(400L))).thenReturn(refetchBatch4);
 
       setupHttpClientWithTracking(6, 30);
