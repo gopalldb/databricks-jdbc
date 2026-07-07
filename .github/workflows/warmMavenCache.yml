@@ -41,7 +41,7 @@ jobs:
 
     steps:
       - name: Set up JDK
-        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
         with:
           java-version: 21
           distribution: 'adopt'
@@ -79,7 +79,7 @@ jobs:
 
       - name: Checkout main branch
         if: inputs.pr_number == ''
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Get JFrog OIDC token
         shell: bash
@@ -143,29 +143,41 @@ jobs:
           # mirrors a real CI step from prCheck.yml, prIntegrationTests.yml,
           # or coverageReport.yml.
 
-          echo "=== 1/8: spotless:check (formatting-check job) ==="
+          echo "=== 1/9: spotless:check (formatting-check job) ==="
           mvn -B --errors spotless:check || true
 
-          echo "=== 2/8: install all modules (packaging-tests job) ==="
+          echo "=== 2/9: install all modules (packaging-tests job) ==="
           mvn -B -pl jdbc-core,assembly-uber,assembly-thin clean install -DskipTests -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Ddependency-check.skip=true
 
-          echo "=== 3/8: Arrow Patch Tests (unit-tests job, JDK 17+) ==="
+          echo "=== 3/9: Arrow Patch Tests (unit-tests job, JDK 17+) ==="
           mvn -B -Pjdk21-NioNotOpen -pl jdbc-core test -Dgroups='Jvm17PlusAndArrowToNioReflectionDisabled' -Ddependency-check.skip=true || true
 
-          echo "=== 4/8: Arrow Allocator Tests (unit-tests job, JDK 17+) ==="
+          echo "=== 4/9: Arrow Allocator Tests (unit-tests job, JDK 17+) ==="
           mvn -B -Pjdk21-NioNotOpen -pl jdbc-core test -Dgroups='Jvm17PlusAndArrowToNioReflectionDisabled' -Dtest="ArrowBufferAllocatorNettyManagerTest,ArrowBufferAllocatorUnsafeManagerTest,ArrowBufferAllocatorUnknownManagerTest" -DforkCount=1 -DreuseForks=false -Ddependency-check.skip=true || true
 
-          echo "=== 5/8: Arrow Memory Tests (unit-tests job) ==="
+          echo "=== 5/9: Arrow Memory Tests (unit-tests job) ==="
           mvn -B -Plow-memory -pl jdbc-core test -Dtest='DatabricksArrowPatchMemoryUsageTest' -Ddependency-check.skip=true || true
 
-          echo "=== 6/8: Unit Tests with jacoco (unit-tests job) ==="
+          echo "=== 6/9: Unit Tests with jacoco (unit-tests job) ==="
           mvn -B -pl jdbc-core clean test -Dtest="DatabricksParameterMetaDataTest#testInitialization" -Dgroups='!Jvm17PlusAndArrowToNioReflectionDisabled' jacoco:report -Ddependency-check.skip=true || true
 
-          echo "=== 7/8: Integration test compile (prIntegrationTests job) ==="
+          echo "=== 7/9: Integration test compile (prIntegrationTests job) ==="
           mvn -B -pl jdbc-core compile test-compile -Ddependency-check.skip=true || true
 
-          echo "=== 8/8: Resolve all declared plugins ==="
+          echo "=== 8/9: Resolve all declared plugins ==="
           mvn -B -pl jdbc-core dependency:resolve-plugins -Ddependency-check.skip=true || true
+
+          # The Surefire JUnit Platform provider (surefire-junit-platform) is
+          # resolved LAZILY by Surefire only when it actually executes tests
+          # against JUnit Platform. The filtered test runs above can fail before
+          # reaching that point (e.g. "No tests matching pattern"), so the
+          # provider never lands in the cache and offline PR jobs then fail with
+          # "surefire-junit-platform:jar:... (absent)". Resolve it explicitly.
+          echo "=== 9/9: Resolve Surefire JUnit Platform provider explicitly ==="
+          SUREFIRE_VERSION=$(mvn -B -pl jdbc-core help:evaluate \
+            -Dexpression=maven-surefire-plugin.version -q -DforceStdout 2>/dev/null \
+            || echo "3.1.2")
+          mvn -B dependency:get -Dartifact="org.apache.maven.surefire:surefire-junit-platform:${SUREFIRE_VERSION}" || true
 
           echo "Dependency resolution complete"
 
@@ -186,16 +198,18 @@ jobs:
         id: cache-key
         shell: bash
         run: |
-          # Include timestamp so each warmer run creates a new cache entry
-          # (GitHub Actions caches are immutable — can't overwrite existing keys).
-          # The restore step uses prefix 'maven-deps-' to match the latest entry.
-          # Old entries auto-expire after 7 days of no access.
+          # Key layout: maven-deps-<pom-hash>-<timestamp>
+          # The pom hash comes FIRST so the consumer's hash-scoped restore-keys
+          # prefix (maven-deps-<pom-hash>) matches only caches warmed for the
+          # same pom, and picks the newest by timestamp. The timestamp keeps each
+          # warmer run a distinct entry (GitHub Actions caches are immutable —
+          # keys can't be overwritten). Old entries auto-expire after 7 days.
           TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
           POM_HASH=${{ hashFiles('**/pom.xml') }}
-          echo "key=maven-deps-${TIMESTAMP}-${POM_HASH}" >> $GITHUB_OUTPUT
+          echo "key=maven-deps-${POM_HASH}-${TIMESTAMP}" >> $GITHUB_OUTPUT
 
       - name: Save Maven dependency cache
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.m2/repository
           key: ${{ steps.cache-key.outputs.key }}

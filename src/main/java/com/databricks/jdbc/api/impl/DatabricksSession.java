@@ -326,15 +326,15 @@ public class DatabricksSession implements IDatabricksSession {
 
   @Override
   public void setClientInfoProperty(String name, String value) {
+    if (name.equalsIgnoreCase(DatabricksJdbcUrlParams.AUTH_ACCESS_TOKEN.getParamName())) {
+      // refresh the access token if provided a new value in client info
+      this.databricksClient.resetAccessToken(value);
+      value = REDACTED_TOKEN; // mask access token before it is logged
+    }
     LOGGER.debug(
         String.format(
             "public void setClientInfoProperty(String name = {%s}, String value = {%s})",
             name, value));
-    if (name.equalsIgnoreCase(DatabricksJdbcUrlParams.AUTH_ACCESS_TOKEN.getParamName())) {
-      // refresh the access token if provided a new value in client info
-      this.databricksClient.resetAccessToken(value);
-      value = REDACTED_TOKEN; // mask access token
-    }
 
     // If application name is being set, update both telemetry and user agent
     if (name.equalsIgnoreCase(DatabricksJdbcUrlParams.APPLICATION_NAME.getParamName())) {
