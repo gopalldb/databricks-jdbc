@@ -441,6 +441,7 @@ public class StreamingChunkProvider implements ChunkProvider {
     if (result.isEndOfStream()) {
       LOGGER.info("End of stream reached for statement {}", statementId);
       endOfStreamReached = true;
+      notifyChunkCreated(); // Wake consumer parked in waitForNextChunkEnqueued
       return;
     }
 
@@ -455,6 +456,7 @@ public class StreamingChunkProvider implements ChunkProvider {
     } else {
       endOfStreamReached = true;
       LOGGER.info("End of stream reached for statement {} (hasMore=false)", statementId);
+      notifyChunkCreated(); // Wake consumer parked in waitForNextChunkEnqueued
     }
 
     // Trigger downloads for new chunks
@@ -494,6 +496,7 @@ public class StreamingChunkProvider implements ChunkProvider {
           pos.rowOffset);
     } else {
       endOfStreamReached = true;
+      notifyChunkCreated(); // Wake consumer parked in waitForNextChunkEnqueued
       LOGGER.info("End of stream reached from initial links for statement {}", statementId);
     }
   }
@@ -674,6 +677,7 @@ public class StreamingChunkProvider implements ChunkProvider {
       // causes consumers to hang forever in waitForChunkCreation.
       if (!result.hasMore()) {
         endOfStreamReached = true;
+        notifyChunkCreated(); // Wake consumer parked in waitForNextChunkEnqueued
       } else if (result.getNextFetchIndex() > nextFetchPosition.chunkIndex
           && allRefreshChunksCreated) {
         nextFetchPosition =
