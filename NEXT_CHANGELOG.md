@@ -24,6 +24,7 @@
 - Fixed timezone-shifted TIMESTAMP values when retrieving nested complex types (STRUCT/ARRAY/MAP) with `EnableComplexDatatypeSupport=1`.
 - Fixed `DatabricksDatabaseMetaData.supportsBatchUpdates()` always returning `false`, which caused batch-aware JDBC clients (e.g. Apache Hop) to skip `executeBatch()` and fall back to one INSERT per row. It now returns `true` when `EnableBatchedInserts=1`, so those clients use the optimized multi-row INSERT path.
 - Fixed `Connection.setReadOnly(true)` throwing `DatabricksSQLFeatureNotSupportedException`, which broke clients (e.g. Trino/Starburst GenericJDBC, HikariCP, DBCP) that call it during connection initialization. Per the JDBC spec, `setReadOnly` is a hint the driver may ignore; it is now a no-op and `isReadOnly()` continues to return `false`.
+- Fixed `ResultSetMetaData.getColumnTypeName()` returning `TIMESTAMP` for `TIMESTAMP_NTZ` columns (e.g. `SELECT MIN(ntz_col) ...`), a regression from 3.0.7. By default the driver now preserves the `TIMESTAMP_NTZ` type name across the SEA, Thrift, and describe-query metadata paths; `getColumnType()` continues to report `java.sql.Types.TIMESTAMP`. Set the new connection property `EnableTimestampNtzTypeName=0` to restore the previous behavior (report `TIMESTAMP`), which matches the legacy (v2.x.x) driver. ([#1495](https://github.com/databricks/databricks-jdbc/issues/1495))
 
 ---
 *Note: When making changes, please add your change under the appropriate section

@@ -137,6 +137,12 @@ public enum DatabricksJdbcUrlParams {
       "EnableGeoSpatialSupport",
       "flag to enable native support of GEOMETRY and GEOGRAPHY data types",
       "1"),
+  ENABLE_TIMESTAMP_NTZ_TYPE_NAME(
+      "EnableTimestampNtzTypeName",
+      "When enabled (default), ResultSetMetaData.getColumnTypeName() reports "
+          + "\"TIMESTAMP_NTZ\" for TIMESTAMP_NTZ columns. Set to 0 to report "
+          + "\"TIMESTAMP\" instead, matching the legacy (v2.x.x) driver behavior.",
+      "1"),
   ROWS_FETCHED_PER_BLOCK(
       "RowsFetchedPerBlock",
       "The maximum number of rows that a query returns at a time.",
