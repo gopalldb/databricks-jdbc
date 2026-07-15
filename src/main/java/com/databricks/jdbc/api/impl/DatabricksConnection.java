@@ -444,12 +444,29 @@ public class DatabricksConnection implements IDatabricksConnection, IDatabricksC
       statement.close(false);
       statementSet.remove(statement);
     }
-    this.session.close();
-    TelemetryClientFactory.getInstance().closeTelemetryClient(connectionContext);
-    DatabricksClientConfiguratorManager.getInstance().removeInstance(connectionContext);
-    DatabricksDriverFeatureFlagsContextFactory.removeInstance(connectionContext);
-    DatabricksHttpClientFactory.getInstance().closeConnection(connectionContext);
-    DatabricksThreadContextHolder.clearAllContext();
+    // Wrap session.close() so that a failure (e.g. expired token → 401 on deleteSession)
+    // never skips the driver-side cleanup below. Without this guard, an expired-token
+    // error propagates out before closeConnection() runs, leaving the IdleConnectionEvictor
+    // thread and other resources permanently leaked (GitHub issue #1221).
+    SQLException sessionCloseException = null;
+    try {
+      this.session.close();
+    } catch (SQLException e) {
+      sessionCloseException = e;
+      LOGGER.warn(
+          "Session close failed (token may have expired); proceeding with local cleanup: {}",
+          e.getMessage());
+    } finally {
+      TelemetryClientFactory.getInstance().closeTelemetryClient(connectionContext);
+      DatabricksClientConfiguratorManager.getInstance().removeInstance(connectionContext);
+      DatabricksDriverFeatureFlagsContextFactory.removeInstance(connectionContext);
+      DatabricksHttpClientFactory.getInstance().closeConnection(connectionContext);
+      DatabricksThreadContextHolder.clearAllContext();
+    }
+    // Re-throw after cleanup so callers still see the error if needed.
+    if (sessionCloseException != null) {
+      throw sessionCloseException;
+    }
   }
 
   @Override

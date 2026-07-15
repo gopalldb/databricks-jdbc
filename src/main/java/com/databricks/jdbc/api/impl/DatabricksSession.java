@@ -232,8 +232,9 @@ public class DatabricksSession implements IDatabricksSession {
         try {
           databricksClient.deleteSession(sessionInfo);
         } catch (DatabricksHttpException e) {
-          if (e.getMessage() != null
-              && e.getMessage().toLowerCase().contains(INVALID_SESSION_STATE_MSG)) {
+          // Treat "invalid session" and auth failures (401/403, expired token) the same way:
+          // the session is gone on the server — log and continue local cleanup.
+          if (isSessionGoneOnServer(e)) {
             LOGGER.warn(
                 "Session [{}] already expired/invalid on server – ignoring during close()",
                 sessionInfo.sessionId());
@@ -411,6 +412,21 @@ public class DatabricksSession implements IDatabricksSession {
     } finally {
       this.isSessionOpen = false;
     }
+  }
+
+  /**
+   * Returns true when a deleteSession failure means the session is already gone on the server —
+   * either because it was explicitly invalidated ("invalid session") or because the auth token
+   * expired (HTTP 401/403). In both cases the session no longer exists server-side and we should
+   * proceed with local cleanup rather than propagating the error.
+   */
+  private static boolean isSessionGoneOnServer(DatabricksHttpException e) {
+    int status = e.getHttpStatusCode();
+    if (status == 401 || status == 403) {
+      return true;
+    }
+    return e.getMessage() != null
+        && e.getMessage().toLowerCase().contains(INVALID_SESSION_STATE_MSG);
   }
 
   @Override
