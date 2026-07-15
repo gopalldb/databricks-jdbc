@@ -1288,4 +1288,31 @@ public class DatabricksConnectionTest {
 
     spyConnection.close();
   }
+
+  @Test
+  public void testCloseRunsCleanupEvenWhenSessionCloseThrows() throws SQLException {
+    // Reproduce GitHub #1221: if deleteSession() fails (e.g. expired token → 401),
+    // DatabricksConnection.close() must still close the HTTP client factory so the
+    // IdleConnectionEvictor thread is not leaked.
+    when(databricksClient.createSession(
+            new Warehouse(WAREHOUSE_ID), CATALOG, SCHEMA, new HashMap<>()))
+        .thenReturn(IMMUTABLE_SESSION_INFO);
+    connection = new DatabricksConnection(connectionContext, databricksClient);
+    connection.open();
+
+    // Simulate a 401 from deleteSession (expired token)
+    DatabricksSQLException expiredTokenEx =
+        new DatabricksSQLException(
+            "HTTP request failed by code: 401, status line: HTTP/1.1 401 Unauthorized.", "08000");
+    doThrow(expiredTokenEx).when(databricksClient).deleteSession(any());
+
+    // close() must not throw — exception from session.close() is caught in the finally
+    assertDoesNotThrow(connection::close);
+
+    // Connection must be marked closed (isClosed checks session.isOpen())
+    assertTrue(connection.isClosed());
+
+    // Verify deleteSession was attempted
+    verify(databricksClient).deleteSession(any());
+  }
 }
