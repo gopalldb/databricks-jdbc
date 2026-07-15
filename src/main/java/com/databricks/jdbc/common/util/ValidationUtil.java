@@ -138,8 +138,7 @@ public class ValidationUtil {
       return;
     }
     LOGGER.error(errorReason);
-    int statusCode = response.getStatusLine().getStatusCode();
-    throw new DatabricksHttpException(errorReason, DEFAULT_HTTP_EXCEPTION_SQLSTATE, statusCode);
+    throw new DatabricksHttpException(errorReason, DEFAULT_HTTP_EXCEPTION_SQLSTATE);
   }
 
   /**
