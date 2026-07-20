@@ -10,20 +10,27 @@ import static org.mockito.Mockito.*;
 import com.databricks.jdbc.api.impl.volume.DatabricksVolumeClientFactory;
 import com.databricks.jdbc.api.internal.IDatabricksConnectionContext;
 import com.databricks.jdbc.api.internal.IDatabricksConnectionInternal;
+import com.databricks.jdbc.api.internal.IDatabricksStatementInternal;
+import com.databricks.jdbc.common.HttpClientType;
 import com.databricks.jdbc.common.IDatabricksComputeResource;
 import com.databricks.jdbc.common.StatementType;
 import com.databricks.jdbc.common.Warehouse;
 import com.databricks.jdbc.common.util.DatabricksThreadContextHolder;
+import com.databricks.jdbc.dbclient.impl.http.ClosedConnectionHttpClient;
+import com.databricks.jdbc.dbclient.impl.http.DatabricksHttpClientFactory;
 import com.databricks.jdbc.dbclient.impl.sqlexec.DatabricksSdkClient;
 import com.databricks.jdbc.exception.DatabricksSQLException;
 import com.databricks.jdbc.exception.DatabricksSQLFeatureNotImplementedException;
 import com.databricks.jdbc.exception.DatabricksSQLFeatureNotSupportedException;
 import com.databricks.jdbc.exception.DatabricksTransactionException;
 import com.databricks.jdbc.model.telemetry.enums.DatabricksDriverErrorCode;
+import java.lang.reflect.Field;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -1314,5 +1321,106 @@ public class DatabricksConnectionTest {
 
     // Verify deleteSession was attempted
     verify(databricksClient).deleteSession(any());
+  }
+
+  @Test
+  public void testExpiredTokenCloseStopsActualIdleConnectionEvictor() throws Exception {
+    IDatabricksConnectionContext localContext =
+        DatabricksConnectionContext.parse(CATALOG_SCHEMA_JDBC_URL, new Properties());
+    DatabricksHttpClientFactory httpClientFactory = DatabricksHttpClientFactory.getInstance();
+    int baselineEvictors = countEvictorThreads();
+
+    try {
+      assertNotNull(httpClientFactory.getClient(localContext, HttpClientType.COMMON));
+      assertTrue(
+          waitUntil(() -> countEvictorThreads() > baselineEvictors, 2, TimeUnit.SECONDS),
+          "Creating a real HTTP client must start an IdleConnectionEvictor");
+
+      when(databricksClient.createSession(
+              new Warehouse(WAREHOUSE_ID), CATALOG, SCHEMA, new HashMap<>()))
+          .thenReturn(IMMUTABLE_SESSION_INFO);
+      DatabricksConnection localConnection =
+          new DatabricksConnection(localContext, databricksClient);
+      localConnection.open();
+      doThrow(new DatabricksSQLException("401 Unauthorized", "08000"))
+          .when(databricksClient)
+          .deleteSession(any());
+
+      assertDoesNotThrow(localConnection::close);
+
+      assertInstanceOf(
+          ClosedConnectionHttpClient.class,
+          httpClientFactory.getClient(localContext, HttpClientType.COMMON));
+      assertTrue(
+          waitUntil(() -> countEvictorThreads() == baselineEvictors, 2, TimeUnit.SECONDS),
+          "Connection evictor must terminate after close despite the expired token");
+    } finally {
+      httpClientFactory.reset();
+    }
+  }
+
+  @Test
+  public void testStatementCloseFailureStillStopsActualIdleConnectionEvictor() throws Exception {
+    IDatabricksConnectionContext localContext =
+        DatabricksConnectionContext.parse(CATALOG_SCHEMA_JDBC_URL, new Properties());
+    DatabricksHttpClientFactory httpClientFactory = DatabricksHttpClientFactory.getInstance();
+    int baselineEvictors = countEvictorThreads();
+
+    try {
+      httpClientFactory.getClient(localContext, HttpClientType.COMMON);
+      assertTrue(waitUntil(() -> countEvictorThreads() > baselineEvictors, 2, TimeUnit.SECONDS));
+
+      when(databricksClient.createSession(
+              new Warehouse(WAREHOUSE_ID), CATALOG, SCHEMA, new HashMap<>()))
+          .thenReturn(IMMUTABLE_SESSION_INFO);
+      DatabricksConnection localConnection =
+          new DatabricksConnection(localContext, databricksClient);
+      localConnection.open();
+
+      IDatabricksStatementInternal failingStatement = mock(IDatabricksStatementInternal.class);
+      doThrow(new DatabricksSQLException("statement close failed", "08000"))
+          .when(failingStatement)
+          .close(false);
+      getStatementSet(localConnection).add(failingStatement);
+
+      assertThrows(DatabricksSQLException.class, localConnection::close);
+
+      verify(databricksClient).deleteSession(any());
+      assertInstanceOf(
+          ClosedConnectionHttpClient.class,
+          httpClientFactory.getClient(localContext, HttpClientType.COMMON));
+      assertTrue(
+          waitUntil(() -> countEvictorThreads() == baselineEvictors, 2, TimeUnit.SECONDS),
+          "Connection evictor must terminate even when statement.close() fails");
+    } finally {
+      httpClientFactory.reset();
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Set<IDatabricksStatementInternal> getStatementSet(
+      DatabricksConnection databricksConnection) throws ReflectiveOperationException {
+    Field field = DatabricksConnection.class.getDeclaredField("statementSet");
+    field.setAccessible(true);
+    return (Set<IDatabricksStatementInternal>) field.get(databricksConnection);
+  }
+
+  private static int countEvictorThreads() {
+    return (int)
+        Thread.getAllStackTraces().keySet().stream()
+            .filter(thread -> thread.isAlive() && thread.getName().contains("Connection evictor"))
+            .count();
+  }
+
+  private static boolean waitUntil(BooleanSupplier condition, long timeout, TimeUnit unit)
+      throws InterruptedException {
+    long deadlineNanos = System.nanoTime() + unit.toNanos(timeout);
+    while (System.nanoTime() < deadlineNanos) {
+      if (condition.getAsBoolean()) {
+        return true;
+      }
+      Thread.sleep(10);
+    }
+    return condition.getAsBoolean();
   }
 }
