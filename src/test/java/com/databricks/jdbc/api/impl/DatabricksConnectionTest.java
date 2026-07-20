@@ -32,6 +32,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -89,6 +90,11 @@ public class DatabricksConnectionTest {
         DatabricksConnectionContext.parse(CATALOG_SCHEMA_JDBC_URL, new Properties());
     transactionsEnabledContext =
         DatabricksConnectionContext.parse(TRANSACTIONS_ENABLED_JDBC_URL, new Properties());
+  }
+
+  @AfterEach
+  void clearThreadContext() {
+    DatabricksThreadContextHolder.clearAllContext();
   }
 
   @Test
