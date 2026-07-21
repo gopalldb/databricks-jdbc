@@ -638,10 +638,10 @@ public class DatabricksConnectionTest {
   void testReadOnlyAndAbort() throws SQLException {
     connection = new DatabricksConnection(connectionContext, databricksClient);
     connection.open();
-    // setReadOnly is a JDBC hint; the driver does not enforce read-only mode, so both values are
-    // accepted as no-ops (see JDBC spec). isReadOnly() continues to report false.
-    assertDoesNotThrow(() -> connection.setReadOnly(false));
+    assertFalse(connection.isReadOnly());
     assertDoesNotThrow(() -> connection.setReadOnly(true));
+    assertTrue(connection.isReadOnly());
+    assertDoesNotThrow(() -> connection.setReadOnly(false));
     assertFalse(connection.isReadOnly());
     ExecutorService executorService = Executors.newFixedThreadPool(1);
     assertDoesNotThrow(() -> connection.abort(executorService));

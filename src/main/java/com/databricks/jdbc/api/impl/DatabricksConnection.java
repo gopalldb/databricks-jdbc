@@ -37,6 +37,7 @@ public class DatabricksConnection implements IDatabricksConnection, IDatabricksC
   private final IDatabricksSession session;
   private final Set<IDatabricksStatementInternal> statementSet = ConcurrentHashMap.newKeySet();
   private SQLWarning warnings = null;
+  private boolean readOnly;
   private final IDatabricksConnectionContext connectionContext;
   private final ResultHeartbeatManager heartbeatManager;
 
@@ -490,19 +491,16 @@ public class DatabricksConnection implements IDatabricksConnection, IDatabricksC
   public void setReadOnly(boolean readOnly) throws SQLException {
     LOGGER.debug("public void setReadOnly(boolean readOnly = {})", readOnly);
     throwExceptionIfConnectionIsClosed();
-    // Per the JDBC spec, setReadOnly is a hint used to enable database optimizations. The
-    // Databricks
-    // backend does not enforce a connection-level read-only mode, so this is treated as a no-op
-    // rather than throwing. isReadOnly() continues to report false since the hint is not enforced.
-    // Throwing here breaks common clients (e.g. HikariCP, DBCP, Trino/Starburst) that call
-    // setReadOnly(true) during connection initialization.
+    // This is a JDBC hint only. Remember it for isReadOnly(), but do not enforce it or send it to
+    // the server.
+    this.readOnly = readOnly;
   }
 
   @Override
   public boolean isReadOnly() throws SQLException {
     LOGGER.debug("public boolean isReadOnly()");
     throwExceptionIfConnectionIsClosed();
-    return false;
+    return readOnly;
   }
 
   @Override
