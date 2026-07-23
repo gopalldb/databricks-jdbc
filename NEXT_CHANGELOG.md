@@ -5,6 +5,8 @@
 ### Added
 - Added `UseBoundedSeaApi` connection property (default `0`/off). When enabled, the driver uses the bounded SEA API contract for CloudFetch: sends `row_offset` on GetResultData requests and uses `next_chunk_index` for chunk discovery instead of `total_chunk_count`. Requires server support.
 
+- Added inline Arrow result support when `UseBoundedSeaApi=1` and `EnableQueryResultDownload=0`, including multi-chunk streaming without relying on the deprecated `total_row_count` manifest field.
+
 ### Updated
 
 ### Fixed
