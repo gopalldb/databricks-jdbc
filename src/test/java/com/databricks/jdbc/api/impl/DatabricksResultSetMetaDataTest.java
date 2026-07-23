@@ -124,6 +124,17 @@ public class DatabricksResultSetMetaDataTest {
   }
 
   @Test
+  public void testMissingTotalRowCountIsUnknown() {
+    ResultManifest resultManifest = getResultManifest().setTotalRowCount(null);
+
+    DatabricksResultSetMetaData metaData =
+        new DatabricksResultSetMetaData(STATEMENT_ID, resultManifest, false, connectionContext);
+
+    assertEquals(-1, metaData.getTotalRows());
+    assertFalse(metaData.hasKnownTotalRows());
+  }
+
+  @Test
   public void testColumnsWithTimestampNTZ() throws SQLException {
     ResultManifest resultManifest = new ResultManifest();
     resultManifest.setTotalRowCount(10L);
