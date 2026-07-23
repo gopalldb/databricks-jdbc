@@ -37,29 +37,31 @@
 
 #### Metadata JDBC Spec Compliance
 
-This release unifies metadata behavior across Thrift and SQL Exec API backends
-using SQL SHOW commands for all metadata operations on SQL warehouses. Several
-non-spec-compliant behaviors have been corrected. Review the changes below before
-upgrading. These changes do not affect metadata on All-Purpose Clusters.
+**Update: No customer action is required.** For Thrift connections to SQL
+warehouses, Databricks has temporarily restored the previous metadata behavior
+through a server-side setting. This avoids performance regressions under high
+concurrency. The change is applied automatically; customers do not need to
+change driver versions, connection strings, or application code.
 
-* **`getTables`/`getColumns`/`getSchemas`: Catalog parameter is now treated as
-  an exact-match identifier per JDBC spec.** Passing `%` or wildcard patterns as
-  catalog previously returned results across all catalogs.
-  Use `null` to search all catalogs.
+Consequently, the metadata behavior changes originally announced for 3.4.1 do
+not currently apply to Thrift connections to SQL warehouses. These connections
+continue to behave as they did before 3.4.1:
 
-* **`getTables` with empty types array: Now returns zero rows per JDBC spec.**
-  Use `null` to return all types.
+* The catalog argument to `getTables`/`getColumns`/`getSchemas` retains its
+  previous wildcard behavior.
+* An empty types array passed to `getTables` retains its previous behavior
+  instead of returning zero rows.
+* `getSchemas` retains its previous handling of `information_schema` and
+  `global_temp`.
+* `getPrimaryKeys`/`getImportedKeys`/`getCrossReference` retain their previous
+  error behavior for non-existent catalogs, schemas, or tables.
+* `getImportedKeys` retains its previous `UPDATE_RULE`/`DELETE_RULE` values.
 
-* **`getSchemas`: Now includes `information_schema` in results.** Excludes
-  `global_temp` schema (previously returned by Thrift for all catalogs).
+This update is limited to metadata operations over Thrift on SQL warehouses;
+SQL Exec API behavior is unchanged. All-Purpose Clusters were not affected by
+the original metadata change.
 
-* **`getPrimaryKeys`/`getImportedKeys`/`getCrossReference` with non-existent
-  catalog, schema, or table: Now returns empty `ResultSet` instead of throwing
-  `SQLException`.**
-
-* **`getImportedKeys` `UPDATE_RULE`/`DELETE_RULE`: Now returns `3` (`NO_ACTION`)
-  instead of `0` (`CASCADE`) for Thrift, and `3` instead of `null` for SEA.**
-  This reflects that Unity Catalog foreign keys are informational and non-enforced.
+#### Prepared Statement Date Parameters
 
 * **`PreparedStatement.setDate()` now sends parameter type as `DATE` instead of
   `TIMESTAMP`.** Previously, `setDate()` incorrectly serialized the parameter
