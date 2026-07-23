@@ -64,7 +64,8 @@ public class DatabricksDatabaseMetaData implements DatabaseMetaData {
   @Override
   public String getURL() throws SQLException {
     LOGGER.debug("public String getURL()");
-    return this.session.getConnectionContext().getConnectionURL();
+    return DatabricksConnectionContext.redactConnectionURL(
+        this.session.getConnectionContext().getConnectionURL());
   }
 
   @Override

@@ -613,7 +613,8 @@ class SeaInlineArrowChunkProviderTest {
 
       // Create a slow-responding mock to keep prefetch busy
       setupSessionMocks();
-      when(mockSdkClient.getResultChunksData(eq(STATEMENT_ID), eq(1L), eq(1L)))
+      lenient()
+          .when(mockSdkClient.getResultChunksData(eq(STATEMENT_ID), eq(1L), eq(1L)))
           .thenAnswer(
               inv -> {
                 TimeUnit.SECONDS.sleep(10);

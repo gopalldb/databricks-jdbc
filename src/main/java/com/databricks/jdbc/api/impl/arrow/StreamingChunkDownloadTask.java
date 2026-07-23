@@ -121,7 +121,7 @@ public class StreamingChunkDownloadTask implements Callable<Void> {
       if (downloadSuccessful) {
         chunk.getChunkReadyFuture().complete(null);
       } else {
-        LOGGER.info(
+        LOGGER.error(
             "Download failed for chunk {}: {}",
             chunk.getChunkIndex(),
             uncaughtException != null ? uncaughtException.getMessage() : "unknown");

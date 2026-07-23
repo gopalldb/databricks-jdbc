@@ -753,4 +753,52 @@ public class ArrowStreamResultTest {
     assertFalse(result.hasNext(), "Empty result should have no data");
     assertDoesNotThrow(result::close);
   }
+
+  /**
+   * Verifies the bounded-SEA contract: with UseBoundedSeaApi=1 and external links,
+   * ArrowStreamResult routes to StreamingChunkProvider and passes null for totalChunkCount (must
+   * not rely on manifest.total_chunk_count). A regression that reverts to getTotalChunkCount() for
+   * the bounded path would break against real bounded servers that omit the field.
+   */
+  @Test
+  public void testBoundedSeaApiUsesStreamingChunkProviderWithNullTotalChunkCount()
+      throws Exception {
+    Properties props = new Properties();
+    props.setProperty("UseBoundedSeaApi", "1");
+    IDatabricksConnectionContext connectionContext =
+        DatabricksConnectionContextFactory.create(JDBC_URL, props);
+
+    assertTrue(
+        connectionContext.isBoundedSeaApiEnabled(), "BoundedSeaApi should be enabled via property");
+
+    DatabricksSession localSession = new DatabricksSession(connectionContext, mockedSdkClient);
+
+    // Intentionally omit total_chunk_count (null) — bounded servers don't populate it.
+    ResultManifest resultManifest =
+        new ResultManifest()
+            .setTotalRowCount(110L)
+            .setTotalByteCount(1000L)
+            .setResultCompression(CompressionCodec.NONE)
+            .setChunks(this.chunkInfos.subList(0, 1))
+            .setSchema(new ResultSchema().setColumns(new ArrayList<>()).setColumnCount(0L));
+    // total_chunk_count is null — asserting the provider is chosen without it
+    assertNull(
+        resultManifest.getTotalChunkCount(),
+        "total_chunk_count must be null to exercise the bounded-SEA contract");
+
+    ResultData localResultData = new ResultData().setExternalLinks(getChunkLinks(0L, 0L, true));
+
+    setupMockResponse();
+    when(mockHttpClient.execute(isA(HttpUriRequest.class), eq(true))).thenReturn(httpResponse);
+
+    ArrowStreamResult result =
+        new ArrowStreamResult(
+            resultManifest, localResultData, STATEMENT_ID, localSession, mockHttpClient);
+
+    // StreamingChunkProvider is selected (not RemoteChunkProvider) — iteration completes
+    assertNotNull(result);
+    assertTrue(result.hasNext(), "Bounded-SEA result should have data");
+    assertTrue(result.next());
+    assertDoesNotThrow(result::close);
+  }
 }

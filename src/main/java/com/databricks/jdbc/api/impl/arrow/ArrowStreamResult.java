@@ -70,6 +70,7 @@ public class ArrowStreamResult implements IExecutionResult {
           statementId.toSQLExecStatementId());
       this.chunkProvider = new EmptyChunkProvider();
     } else {
+      // Check if the result data contains the arrow data inline.
       boolean isInlineArrow = resultData.getAttachment() != null;
       IDatabricksConnectionContext connectionContext = session.getConnectionContext();
       if (isInlineArrow
@@ -424,9 +425,14 @@ public class ArrowStreamResult implements IExecutionResult {
   private static ChunkLinkFetchResult convertToChunkLinkFetchResult(
       Collection<ExternalLink> externalLinks, Long totalChunkCount) {
     if (externalLinks == null || externalLinks.isEmpty()) {
-      // If total chunk count is zero, return end of stream
+      // total_chunk_count == 0: explicit empty result
       if (totalChunkCount != null && totalChunkCount == 0) {
         LOGGER.debug("Total chunk count is zero, returning end of stream");
+        return ChunkLinkFetchResult.endOfStream();
+      }
+      // Bounded-SEA mode omits total_chunk_count; empty links means the server has no chunks.
+      if (totalChunkCount == null) {
+        LOGGER.debug("No external links and total_chunk_count absent — treating as end of stream");
         return ChunkLinkFetchResult.endOfStream();
       }
       return null;

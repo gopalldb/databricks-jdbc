@@ -4,6 +4,7 @@ import static com.databricks.jdbc.integration.IntegrationTestUtil.*;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.databricks.jdbc.api.impl.DatabricksResultSetMetaData;
 import com.databricks.jdbc.common.DatabricksJdbcConstants;
@@ -18,11 +19,18 @@ public class BoundedSeaApiCloudFetchIntegrationTests extends AbstractFakeService
 
   @BeforeEach
   void setUp() throws SQLException {
+    // These tests use SEA-only WireMock stubs. Skip when running in Thrift-server fake-service
+    // mode (CI sets FAKE_SERVICE_TYPE=THRIFT_SERVER for the Thrift integration test suite).
+    assumeTrue(
+        isSqlExecSdkClient(),
+        "BoundedSeaApiCloudFetchIntegrationTests require SQL_EXEC fake service type");
+
     System.setProperty(DatabricksJdbcConstants.IS_FAKE_SERVICE_TEST_PROP, "true");
 
     Properties props = new Properties();
     props.setProperty("UseBoundedSeaApi", "1");
-    props.setProperty("EnableSQLExecHybridResults", "1");
+    // UseThriftClient=0 (SEA) is injected by getValidJDBCConnection via
+    // FakeServiceConfigLoader.shouldUseThriftClient() when FAKE_SERVICE_TYPE=SQL_EXEC.
     connection = getValidJDBCConnection(props);
   }
 
@@ -43,12 +51,15 @@ public class BoundedSeaApiCloudFetchIntegrationTests extends AbstractFakeService
     statement.setMaxRows(maxRows);
 
     try (ResultSet rs = statement.executeQuery(sql)) {
+      DatabricksResultSetMetaData metaData = (DatabricksResultSetMetaData) rs.getMetaData();
+
       int rowCount = 0;
       while (rs.next()) {
         rowCount++;
       }
 
       assertEquals(maxRows, rowCount);
+      assertTrue(metaData.getIsCloudFetchUsed());
       assertTrue(rs.isAfterLast());
     }
   }

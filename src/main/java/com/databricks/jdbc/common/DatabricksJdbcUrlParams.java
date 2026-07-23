@@ -10,6 +10,7 @@ public enum DatabricksJdbcUrlParams {
   LOG_FILE_SIZE("LogFileSize", "Maximum size of the log file", "10"), // 10 MB
   LOG_FILE_COUNT("LogFileCount", "Number of log files to retain", "10"),
   UID("uid", "UID for authentication"),
+  USER("user", "Username passed to DriverManager.getConnection(url, user, password)"),
   PASSWORD("password", "Password for authentication"),
   CLIENT_ID("OAuth2ClientId", "OAuth2 Client ID"),
   CLIENT_SECRET("OAuth2Secret", "OAuth2 Client Secret"),
@@ -135,6 +136,12 @@ public enum DatabricksJdbcUrlParams {
   ENABLE_GEOSPATIAL_SUPPORT(
       "EnableGeoSpatialSupport",
       "flag to enable native support of GEOMETRY and GEOGRAPHY data types",
+      "1"),
+  ENABLE_TIMESTAMP_NTZ_TYPE_NAME(
+      "EnableTimestampNtzTypeName",
+      "When enabled (default), ResultSetMetaData.getColumnTypeName() reports "
+          + "\"TIMESTAMP_NTZ\" for TIMESTAMP_NTZ columns. Set to 0 to report "
+          + "\"TIMESTAMP\" instead, matching the legacy (v2.x.x) driver behavior.",
       "1"),
   ROWS_FETCHED_PER_BLOCK(
       "RowsFetchedPerBlock",
