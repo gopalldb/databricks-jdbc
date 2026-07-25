@@ -59,7 +59,7 @@ Breaking Changes
 
  * Update (2026-07-23) - No customer action is required: For Thrift connections
    to SQL warehouses, Databricks has temporarily restored the previous metadata
-   behavior through a server-side setting. The update is applied automatically;
+   behavior. The update is applied automatically;
    customers do not need to change driver versions, connection strings, or
    application code. Consequently, the metadata behavior changes originally
    announced below do not currently apply to these connections. SQL Exec API
